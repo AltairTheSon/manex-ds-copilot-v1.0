@@ -1,0 +1,66 @@
+<div class="app-container">
+  <main class="main-content">
+    <!-- Application Header -->
+    <header class="app-header" *ngIf="!isConnected">
+      <div class="header-background"></div>
+      <div class="header-content">
+        <h1 class="app-title">{{ title() }}</h1>
+        <p class="app-subtitle">
+          Connect to Figma and extract design tokens and artboards from your files
+        </p>
+      </div>
+    </header>
+
+    <!-- Connection Form -->
+    <section class="form-section" *ngIf="!isConnected && !isLoading">
+      <app-figma-form (onConnect)="onFigmaConnect($event)"></app-figma-form>
+      
+      <!-- Error Display -->
+      <div class="error-container" *ngIf="error">
+        <div class="error-message">
+          <i class="ri-error-warning-line"></i>
+          <span>{{ error }}</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Results Section -->
+    <section class="results-section" *ngIf="isConnected || isLoading">
+      <!-- Reset Button -->
+      <div class="results-header" *ngIf="isConnected">
+        <button class="reset-button" (click)="onReset()">
+          <i class="ri-arrow-left-line"></i>
+          New Analysis
+        </button>
+      </div>
+      
+      <!-- Results Component -->
+      <app-figma-results
+        [artboards]="artboards"
+        [designTokens]="designTokens"
+        [fileInfo]="fileInfo"
+        [isLoading]="isLoading">
+      </app-figma-results>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="app-footer" *ngIf="!isLoading">
+    <div class="footer-content">
+      <p class="footer-text">
+        <i class="ri-shield-check-line"></i>
+        Secure connection to Figma API. Your data is not stored.
+      </p>
+      <div class="footer-links">
+        <a href="https://www.figma.com/developers/api" target="_blank" rel="noopener noreferrer">
+          <i class="ri-external-link-line"></i>
+          Figma API
+        </a>
+        <a href="https://help.figma.com/hc/en-us/articles/8085703771159-Manage-personal-access-tokens" target="_blank" rel="noopener noreferrer">
+          <i class="ri-key-2-line"></i>
+          Get Token
+        </a>
+      </div>
+    </div>
+  </footer>
+</div>
