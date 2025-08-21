@@ -1,0 +1,86 @@
+<div class="figma-form-container">
+  <div class="form-header">
+    <div class="header-icon">
+      <i class="ri-figma-line"></i>
+    </div>
+    <h1 class="header-title">Connect to Figma</h1>
+    <p class="header-subtitle">Extract design tokens and artboards from your Figma files</p>
+  </div>
+
+  <form [formGroup]="figmaForm" (ngSubmit)="onSubmit()" class="figma-form">
+    <div class="form-group">
+      <label for="accessToken" class="form-label">
+        <i class="ri-key-2-line"></i>
+        Figma Access Token
+      </label>
+      <input
+        id="accessToken"
+        type="password"
+        formControlName="accessToken"
+        class="form-input"
+        [class.error]="getFieldError('accessToken')"
+        placeholder="Enter your Figma access token"
+        autocomplete="off"
+      />
+      <div class="field-hint">
+        Get your token from 
+        <a href="https://www.figma.com/developers/api#access-tokens" target="_blank" rel="noopener noreferrer">
+          Figma Settings
+        </a>
+      </div>
+      @if (getFieldError('accessToken')) {
+        <div class="field-error">
+          <i class="ri-error-warning-line"></i>
+          {{ getFieldError('accessToken') }}
+        </div>
+      }
+    </div>
+
+    <div class="form-group">
+      <label for="fileId" class="form-label">
+        <i class="ri-file-3-line"></i>
+        Figma File ID
+      </label>
+      <input
+        id="fileId"
+        type="text"
+        formControlName="fileId"
+        class="form-input"
+        [class.error]="getFieldError('fileId')"
+        placeholder="Enter the Figma file ID"
+        autocomplete="off"
+      />
+      <div class="field-hint">
+        Copy from the URL: figma.com/file/<strong>FILE_ID</strong>/filename
+      </div>
+      @if (getFieldError('fileId')) {
+        <div class="field-error">
+          <i class="ri-error-warning-line"></i>
+          {{ getFieldError('fileId') }}
+        </div>
+      }
+    </div>
+
+    <button
+      type="submit"
+      class="connect-button"
+      [disabled]="!figmaForm.valid || isLoading"
+      [class.loading]="isLoading"
+    >
+      @if (isLoading) {
+        <i class="ri-loader-4-line loading-spinner"></i>
+        Connecting...
+      } @else {
+        <i class="ri-link"></i>
+        Connect to Figma
+      }
+    </button>
+  </form>
+
+  <div class="form-footer">
+    <div class="security-note">
+      <i class="ri-shield-check-line"></i>
+      Your access token is used only for this session and is not stored
+    </div>
+  </div>
+</div>

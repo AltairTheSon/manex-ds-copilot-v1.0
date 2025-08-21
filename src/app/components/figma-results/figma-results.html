@@ -1,0 +1,144 @@
+<div class="results-container" *ngIf="!isLoading">
+  <!-- File Information Header -->
+  <div class="file-header" *ngIf="fileInfo">
+    <div class="file-info">
+      <h1 class="file-name">
+        <i class="ri-figma-fill"></i>
+        {{ fileInfo.name }}
+      </h1>
+      <div class="file-meta">
+        <span class="meta-item">
+          <i class="ri-time-line"></i>
+          Last modified: {{ formatDate(fileInfo.lastModified) }}
+        </span>
+        <span class="meta-item">
+          <i class="ri-git-branch-line"></i>
+          Version: {{ fileInfo.version }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Navigation Tabs -->
+  <div class="results-tabs">
+    <button 
+      class="tab-button"
+      [class.active]="selectedTab === 'artboards'"
+      (click)="selectTab('artboards')"
+    >
+      <i class="ri-artboard-2-line"></i>
+      Artboards
+      <span class="tab-count">{{ artboards.length }}</span>
+    </button>
+    <button 
+      class="tab-button"
+      [class.active]="selectedTab === 'tokens'"
+      (click)="selectTab('tokens')"
+    >
+      <i class="ri-palette-line"></i>
+      Design Tokens
+      <span class="tab-count">{{ designTokens.length }}</span>
+    </button>
+  </div>
+
+  <!-- Artboards Tab -->
+  <div class="tab-content" *ngIf="selectedTab === 'artboards'">
+    <div class="artboards-grid" *ngIf="artboards.length > 0; else noArtboards">
+      <div class="artboard-card" *ngFor="let artboard of artboards">
+        <div class="artboard-image">
+          <img 
+            [src]="artboard.imageUrl" 
+            [alt]="artboard.name"
+            (error)="$event.target.style.display='none'"
+            loading="lazy"
+          />
+          <div class="artboard-overlay">
+            <div class="artboard-dimensions">
+              {{ artboard.width }}×{{ artboard.height }}
+            </div>
+          </div>
+        </div>
+        <div class="artboard-info">
+          <h3 class="artboard-name">{{ artboard.name }}</h3>
+          <div class="artboard-details">
+            <span class="detail-item">
+              <i class="ri-ruler-2-line"></i>
+              {{ artboard.width }}×{{ artboard.height }}px
+            </span>
+            <span class="detail-item" *ngIf="artboard.backgroundColor">
+              <i class="ri-palette-fill"></i>
+              <span class="color-preview" [style.background-color]="artboard.backgroundColor"></span>
+              {{ artboard.backgroundColor }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <ng-template #noArtboards>
+      <div class="empty-state">
+        <i class="ri-artboard-2-line"></i>
+        <h3>No Artboards Found</h3>
+        <p>No artboards were found in this Figma file. Make sure your file contains frames or components.</p>
+      </div>
+    </ng-template>
+  </div>
+
+  <!-- Design Tokens Tab -->
+  <div class="tab-content" *ngIf="selectedTab === 'tokens'">
+    <div class="tokens-header" *ngIf="designTokens.length > 0">
+      <button class="download-button" (click)="downloadTokensAsCSV()">
+        <i class="ri-download-2-line"></i>
+        Download CSV
+      </button>
+    </div>
+
+    <div class="tokens-content" *ngIf="designTokens.length > 0; else noTokens">
+      <div class="token-category" *ngFor="let category of getUniqueCategories()">
+        <h3 class="category-title">
+          <i class="ri-folder-3-line"></i>
+          {{ category | titlecase }}
+        </h3>
+        <div class="tokens-grid">
+          <div class="token-card" *ngFor="let token of getTokensByCategory(category)">
+            <div class="token-header">
+              <div class="token-type">
+                <i [class]="'ri-' + (token.type === 'color' ? 'palette' : token.type === 'typography' ? 'font-size' : token.type === 'shadow' ? 'drop' : 'ruler') + '-line'"></i>
+                {{ token.type | titlecase }}
+              </div>
+              <div class="token-name">{{ token.name }}</div>
+            </div>
+            <div class="token-value">
+              <div class="value-preview" *ngIf="token.type === 'color'">
+                <span class="color-swatch" [style.background-color]="token.value"></span>
+              </div>
+              <code class="value-code">{{ token.value }}</code>
+            </div>
+            <div class="token-description" *ngIf="token.description">
+              {{ token.description }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <ng-template #noTokens>
+      <div class="empty-state">
+        <i class="ri-palette-line"></i>
+        <h3>No Design Tokens Found</h3>
+        <p>No design tokens were extracted from this Figma file. Try a file with defined styles and components.</p>
+      </div>
+    </ng-template>
+  </div>
+</div>
+
+<!-- Loading State -->
+<div class="loading-container" *ngIf="isLoading">
+  <div class="loading-content">
+    <div class="loading-spinner">
+      <i class="ri-loader-4-line"></i>
+    </div>
+    <h2>Processing Figma File...</h2>
+    <p>Extracting artboards and design tokens from your file</p>
+  </div>
+</div>
