@@ -1,0 +1,1 @@
+# manex-ds-copilot-v1.0
