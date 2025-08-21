@@ -1,0 +1,26 @@
+<div class="app-container">
+  <header class="app-header">
+    <h1>{{ title }}</h1>
+    <p>Extract design tokens and artboards from Figma files</p>
+  </header>
+
+  <main class="app-main">
+    <app-figma-form 
+      (onConnect)="onConnect($event)"
+      [isLoading]="isLoading">
+    </app-figma-form>
+
+    <div *ngIf="error" class="error-message">
+      {{ error }}
+    </div>
+
+    <app-figma-results 
+      [artboards]="artboards"
+      [designTokens]="designTokens"
+      [fileInfo]="fileInfo"
+      [isLoading]="isLoading">
+    </app-figma-results>
+  </main>
+
+  <router-outlet></router-outlet>
+</div>

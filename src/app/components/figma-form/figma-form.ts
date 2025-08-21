@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Output } from '@angular/core';
+import { Component, EventEmitter, Output, Input } from '@angular/core';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { FigmaCredentials } from '../../interfaces/figma.interface';
@@ -11,9 +11,9 @@ import { FigmaCredentials } from '../../interfaces/figma.interface';
 })
 export class FigmaForm {
   @Output() onConnect = new EventEmitter<FigmaCredentials>();
+  @Input() isLoading = false;
   
   figmaForm: FormGroup;
-  isLoading = false;
 
   constructor(private fb: FormBuilder) {
     this.figmaForm = this.fb.group({
@@ -24,7 +24,6 @@ export class FigmaForm {
 
   onSubmit(): void {
     if (this.figmaForm.valid && !this.isLoading) {
-      this.isLoading = true;
       const credentials: FigmaCredentials = {
         accessToken: this.figmaForm.get('accessToken')?.value,
         fileId: this.figmaForm.get('fileId')?.value
