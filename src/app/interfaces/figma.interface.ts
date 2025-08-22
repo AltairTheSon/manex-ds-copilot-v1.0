@@ -22,6 +22,11 @@ export interface ConnectionOptions {
   mcp: MCPCredentials;
 }
 
+export interface ConnectionRequest {
+  connectionType: 'figma' | 'mcp';
+  credentials: FigmaCredentials | MCPCredentials;
+}
+
 export interface FigmaFileResponse {
   document: FigmaNode;
   components: { [key: string]: FigmaComponent };

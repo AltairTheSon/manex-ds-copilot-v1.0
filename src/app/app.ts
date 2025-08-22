@@ -5,15 +5,16 @@ import { HttpClientModule } from '@angular/common/http';
 import { FigmaForm } from './components/figma-form/figma-form';
 import { FigmaResults } from './components/figma-results/figma-results';
 import { FigmaService } from './services/figma.service';
+import { MCPConnectionService } from './services/mcp-connection.service';
 import { ConnectionPersistenceService } from './services/connection-persistence.service';
-import { FigmaCredentials, ProcessedArtboard, DesignToken, FigmaPage, LocalStyle, FigmaComponent, Artboard, StoredConnection } from './interfaces/figma.interface';
+import { FigmaCredentials, MCPCredentials, ProcessedArtboard, DesignToken, FigmaPage, LocalStyle, FigmaComponent, Artboard, StoredConnection, ConnectionRequest } from './interfaces/figma.interface';
 
 @Component({
   selector: 'app-root',
   imports: [CommonModule, RouterModule, HttpClientModule, FigmaForm, FigmaResults],
   templateUrl: './app.html',
   styleUrl: './app.scss',
-  providers: [FigmaService, ConnectionPersistenceService]
+  providers: [FigmaService, MCPConnectionService, ConnectionPersistenceService]
 })
 export class App implements OnInit {
   @ViewChild(FigmaForm) figmaForm!: FigmaForm;
@@ -29,11 +30,13 @@ export class App implements OnInit {
   syncStatus: { lastSynced: string; isAutoSync: boolean } = { lastSynced: '', isAutoSync: false };
   isLoading = false;
   error: string | null = null;
-  currentCredentials: FigmaCredentials | null = null;
+  currentCredentials: FigmaCredentials | MCPCredentials | null = null;
+  currentConnectionType: 'figma' | 'mcp' = 'figma';
   isRestoringConnection = false;
 
   constructor(
     private figmaService: FigmaService,
+    private mcpService: MCPConnectionService,
     private connectionPersistence: ConnectionPersistenceService
   ) {}
 
@@ -48,15 +51,19 @@ export class App implements OnInit {
     if (this.connectionPersistence.hasValidStoredConnection()) {
       const storedConnection = this.connectionPersistence.getStoredConnection();
       
-      if (storedConnection && storedConnection.connectionType === 'figma') {
+      if (storedConnection) {
         this.isRestoringConnection = true;
-        const credentials = storedConnection.credentials as FigmaCredentials;
+        this.currentConnectionType = storedConnection.connectionType;
         
         // Validate connection by making a quick API call
-        this.figmaService.syncFileChanges(credentials).subscribe({
+        const validationObservable = storedConnection.connectionType === 'figma'
+          ? this.figmaService.syncFileChanges(storedConnection.credentials as FigmaCredentials)
+          : this.mcpService.syncFileChanges(storedConnection.credentials as MCPCredentials);
+          
+        validationObservable.subscribe({
           next: (hasChanges) => {
             // Connection is valid, restore the full state
-            this.restoreConnectionData(storedConnection, credentials);
+            this.restoreConnectionData(storedConnection);
           },
           error: (error) => {
             console.log('Stored connection is no longer valid:', error);
@@ -71,27 +78,33 @@ export class App implements OnInit {
   /**
    * Restore connection data and fetch fresh information
    */
-  private restoreConnectionData(storedConnection: StoredConnection, credentials: FigmaCredentials): void {
-    this.currentCredentials = credentials;
+  private restoreConnectionData(storedConnection: StoredConnection): void {
+    this.currentCredentials = storedConnection.credentials;
+    this.currentConnectionType = storedConnection.connectionType;
     
     // Pre-populate form with restored credentials
     if (this.figmaForm) {
-      this.figmaForm.setCredentials(credentials);
+      this.figmaForm.setCredentials(storedConnection.credentials, storedConnection.connectionType);
     }
     
     // Fetch fresh data
-    this.connectWithCredentials(credentials, true);
+    this.connectWithCredentials(storedConnection.connectionType, storedConnection.credentials, true);
   }
 
-  onConnect(credentials: FigmaCredentials): void {
-    this.connectWithCredentials(credentials, false);
+  onConnect(connectionRequest: ConnectionRequest): void {
+    this.connectWithCredentials(connectionRequest.connectionType, connectionRequest.credentials, false);
   }
 
   /**
    * Connect with credentials and optionally mark as restored connection
    */
-  private connectWithCredentials(credentials: FigmaCredentials, isRestore: boolean = false): void {
+  private connectWithCredentials(
+    connectionType: 'figma' | 'mcp', 
+    credentials: FigmaCredentials | MCPCredentials, 
+    isRestore: boolean = false
+  ): void {
     this.currentCredentials = credentials;
+    this.currentConnectionType = connectionType;
     this.isLoading = true;
     this.error = null;
     
@@ -99,7 +112,11 @@ export class App implements OnInit {
       this.figmaForm.setLoading(true);
     }
     
-    this.figmaService.getEnhancedAnalysis(credentials).subscribe({
+    const analysisObservable = connectionType === 'figma'
+      ? this.figmaService.getEnhancedAnalysis(credentials as FigmaCredentials)
+      : this.mcpService.getEnhancedAnalysis(credentials as MCPCredentials);
+    
+    analysisObservable.subscribe({
       next: (data) => {
         this.pages = data.pages;
         this.designTokens = data.designTokens;
@@ -117,7 +134,7 @@ export class App implements OnInit {
         // Store successful connection
         if (this.fileInfo) {
           const storedConnection = this.connectionPersistence.createStoredConnection(
-            'figma',
+            connectionType,
             credentials,
             this.fileInfo
           );
@@ -125,7 +142,7 @@ export class App implements OnInit {
         }
       },
       error: (error) => {
-        this.error = error.message || 'An error occurred while connecting to Figma';
+        this.error = error.message || `An error occurred while connecting to ${connectionType === 'figma' ? 'Figma' : 'MCP server'}`;
         this.isLoading = false;
         this.isRestoringConnection = false;
         
@@ -149,15 +166,21 @@ export class App implements OnInit {
 
     this.figmaResults.setArtboardsLoading(true);
     
-    this.figmaService.fetchPageArtboards(event.pageId, this.currentCredentials).subscribe({
-      next: (artboards: Artboard[]) => {
-        this.figmaResults.setPageArtboards(artboards);
-      },
-      error: (error) => {
-        console.error('Error fetching page artboards:', error);
-        this.figmaResults.setArtboardsLoading(false);
-        // Could show error message to user here
-      }
-    });
+    // Only Figma service supports page artboards currently
+    if (this.currentConnectionType === 'figma') {
+      this.figmaService.fetchPageArtboards(event.pageId, this.currentCredentials as FigmaCredentials).subscribe({
+        next: (artboards: Artboard[]) => {
+          this.figmaResults.setPageArtboards(artboards);
+        },
+        error: (error) => {
+          console.error('Error fetching page artboards:', error);
+          this.figmaResults.setArtboardsLoading(false);
+        }
+      });
+    } else {
+      // MCP doesn't support page artboards yet
+      this.figmaResults.setArtboardsLoading(false);
+      console.log('Page artboards not supported for MCP connections yet');
+    }
   }
 }
