@@ -18,7 +18,8 @@
       [components]="components"
       [fileInfo]="fileInfo"
       [syncStatus]="syncStatus"
-      [isLoading]="isLoading">
+      [isLoading]="isLoading"
+      (fetchPageArtboards)="onFetchPageArtboards($event)">
     </app-figma-results>
   </main>
 

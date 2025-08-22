@@ -5,7 +5,7 @@ import { HttpClientModule } from '@angular/common/http';
 import { FigmaForm } from './components/figma-form/figma-form';
 import { FigmaResults } from './components/figma-results/figma-results';
 import { FigmaService } from './services/figma.service';
-import { FigmaCredentials, ProcessedArtboard, DesignToken, FigmaPage, LocalStyle, FigmaComponent } from './interfaces/figma.interface';
+import { FigmaCredentials, ProcessedArtboard, DesignToken, FigmaPage, LocalStyle, FigmaComponent, Artboard } from './interfaces/figma.interface';
 
 @Component({
   selector: 'app-root',
@@ -16,6 +16,7 @@ import { FigmaCredentials, ProcessedArtboard, DesignToken, FigmaPage, LocalStyle
 })
 export class App {
   @ViewChild(FigmaForm) figmaForm!: FigmaForm;
+  @ViewChild(FigmaResults) figmaResults!: FigmaResults;
   
   title = 'figma-ds-copilot';
   artboards: ProcessedArtboard[] = [];
@@ -27,10 +28,12 @@ export class App {
   syncStatus: { lastSynced: string; isAutoSync: boolean } = { lastSynced: '', isAutoSync: false };
   isLoading = false;
   error: string | null = null;
+  currentCredentials: FigmaCredentials | null = null;
 
   constructor(private figmaService: FigmaService) {}
 
   onConnect(credentials: FigmaCredentials): void {
+    this.currentCredentials = credentials;
     this.isLoading = true;
     this.error = null;
     
@@ -49,6 +52,26 @@ export class App {
         this.error = error.message || 'An error occurred while connecting to Figma';
         this.isLoading = false;
         this.figmaForm.setLoading(false);
+      }
+    });
+  }
+
+  onFetchPageArtboards(event: { pageId: string; pageName: string }): void {
+    if (!this.currentCredentials) {
+      console.error('No credentials available for fetching artboards');
+      return;
+    }
+
+    this.figmaResults.setArtboardsLoading(true);
+    
+    this.figmaService.fetchPageArtboards(event.pageId, this.currentCredentials).subscribe({
+      next: (artboards: Artboard[]) => {
+        this.figmaResults.setPageArtboards(artboards);
+      },
+      error: (error) => {
+        console.error('Error fetching page artboards:', error);
+        this.figmaResults.setArtboardsLoading(false);
+        // Could show error message to user here
       }
     });
   }

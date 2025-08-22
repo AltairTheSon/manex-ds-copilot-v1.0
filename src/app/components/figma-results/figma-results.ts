@@ -1,6 +1,6 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ProcessedArtboard, DesignToken, FigmaPage, LocalStyle, FigmaComponent, FigmaFileData } from '../../interfaces/figma.interface';
+import { ProcessedArtboard, DesignToken, FigmaPage, LocalStyle, FigmaComponent, FigmaFileData, Artboard } from '../../interfaces/figma.interface';
 
 @Component({
   selector: 'app-figma-results',
@@ -18,10 +18,59 @@ export class FigmaResults {
   @Input() isLoading = false;
   @Input() syncStatus: { lastSynced: string; isAutoSync: boolean } = { lastSynced: '', isAutoSync: false };
 
+  @Output() fetchPageArtboards = new EventEmitter<{ pageId: string; pageName: string }>();
+
   selectedTab: 'pages' | 'tokens' | 'components' | 'sync' = 'pages';
+  
+  // Page artboards navigation state
+  selectedPage: FigmaPage | null = null;
+  pageArtboards: Artboard[] = [];
+  isLoadingArtboards = false;
+
+  // Modal states
+  showSyncHistoryModal = false;
+  showSyncSettingsModal = false;
 
   selectTab(tab: 'pages' | 'tokens' | 'components' | 'sync'): void {
     this.selectedTab = tab;
+    // Reset page selection when switching tabs
+    if (tab !== 'pages') {
+      this.selectedPage = null;
+      this.pageArtboards = [];
+    }
+  }
+
+  /**
+   * Handle page click - navigate to artboards view
+   */
+  onPageClick(page: FigmaPage): void {
+    this.selectedPage = page;
+    this.isLoadingArtboards = true;
+    this.fetchPageArtboards.emit({ pageId: page.id, pageName: page.name });
+  }
+
+  /**
+   * Navigate back to pages list
+   */
+  backToPages(): void {
+    this.selectedPage = null;
+    this.pageArtboards = [];
+    this.isLoadingArtboards = false;
+  }
+
+  /**
+   * Set page artboards data (called from parent component)
+   */
+  setPageArtboards(artboards: Artboard[]): void {
+    this.pageArtboards = artboards;
+    this.isLoadingArtboards = false;
+  }
+
+  /**
+   * Set loading state for artboards
+   */
+  setArtboardsLoading(loading: boolean): void {
+    this.isLoadingArtboards = loading;
   }
 
   // Sync functionality methods
@@ -33,12 +82,20 @@ export class FigmaResults {
 
   viewSyncHistory(): void {
     console.log('View sync history clicked');
-    // TODO: Implement sync history view
+    this.showSyncHistoryModal = true;
   }
 
   openSyncSettings(): void {
     console.log('Open sync settings clicked');
-    // TODO: Implement sync settings
+    this.showSyncSettingsModal = true;
+  }
+
+  closeSyncHistoryModal(): void {
+    this.showSyncHistoryModal = false;
+  }
+
+  closeSyncSettingsModal(): void {
+    this.showSyncSettingsModal = false;
   }
 
   toggleAutoSync(event: Event): void {

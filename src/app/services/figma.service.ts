@@ -15,7 +15,8 @@ import {
   FigmaPage,
   LocalStyle,
   FigmaComponent,
-  FigmaFileData
+  FigmaFileData,
+  Artboard
 } from '../interfaces/figma.interface';
 
 @Injectable({
@@ -176,26 +177,93 @@ export class FigmaService {
   }
 
   /**
+   * Fetch artboards for a specific page
+   */
+  fetchPageArtboards(pageId: string, credentials: FigmaCredentials): Observable<Artboard[]> {
+    return this.getFileData(credentials).pipe(
+      switchMap((fileData: FigmaFileResponse) => {
+        const page = this.findPageById(fileData.document, pageId);
+        
+        if (!page || !page.children) {
+          return throwError(() => new Error('Page not found or has no children'));
+        }
+
+        const artboards: Artboard[] = [];
+        
+        // Extract artboards (FRAME type nodes) from the page
+        page.children.forEach(child => {
+          if (child.type === 'FRAME' && child.absoluteBoundingBox) {
+            artboards.push({
+              id: child.id,
+              name: child.name,
+              type: 'FRAME',
+              thumbnail: '', // Will be populated with image API
+              absoluteBoundingBox: {
+                x: child.absoluteBoundingBox.x,
+                y: child.absoluteBoundingBox.y,
+                width: child.absoluteBoundingBox.width,
+                height: child.absoluteBoundingBox.height
+              }
+            });
+          }
+        });
+
+        // Get thumbnails for the artboards
+        if (artboards.length > 0) {
+          const nodeIds = artboards.map(artboard => artboard.id);
+          return this.getImages(credentials, nodeIds).pipe(
+            map((imageResponse: FigmaImageResponse) => {
+              return artboards.map(artboard => ({
+                ...artboard,
+                thumbnail: imageResponse.images[artboard.id] || ''
+              }));
+            })
+          );
+        } else {
+          return [artboards];
+        }
+      })
+    );
+  }
+
+  /**
+   * Find a page by ID in the document tree
+   */
+  private findPageById(node: FigmaNode, pageId: string): FigmaNode | null {
+    if (node.id === pageId) {
+      return node;
+    }
+    
+    if (node.children) {
+      for (const child of node.children) {
+        const found = this.findPageById(child, pageId);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  /**
    * Fetch local styles from Figma file
    */
   fetchLocalStyles(credentials: FigmaCredentials): Observable<LocalStyle[]> {
-    const headers = this.getHeaders(credentials.accessToken);
-    
-    return this.http.get<any>(
-      `${this.FIGMA_API_BASE}/files/${credentials.fileId}/styles`,
-      { headers }
-    ).pipe(
-      map((stylesResponse: any) => {
+    // Use main file endpoint to get actual style data with values
+    return this.getFileData(credentials).pipe(
+      map((fileData: FigmaFileResponse) => {
         const localStyles: LocalStyle[] = [];
         
-        if (stylesResponse.meta && stylesResponse.meta.styles) {
-          Object.values(stylesResponse.meta.styles).forEach((style: any) => {
+        // Extract styles from the main file data which contains actual values
+        if (fileData.styles) {
+          Object.values(fileData.styles).forEach((style: any) => {
             localStyles.push({
               id: style.key,
               name: style.name,
-              type: style.style_type as 'FILL' | 'TEXT' | 'EFFECT',
+              type: style.styleType as 'FILL' | 'TEXT' | 'EFFECT',
               description: style.description || '',
-              styleType: style.style_type
+              styleType: style.styleType
             });
           });
         }
@@ -210,6 +278,37 @@ export class FigmaService {
    * Fetch components from Figma file
    */
   fetchComponents(credentials: FigmaCredentials): Observable<FigmaComponent[]> {
+    return forkJoin({
+      fileData: this.getFileData(credentials),
+      componentsApi: this.getComponentsFromAPI(credentials)
+    }).pipe(
+      map(({ fileData, componentsApi }) => {
+        const components: FigmaComponent[] = [];
+        
+        // First, add components from the dedicated API endpoint
+        components.push(...componentsApi);
+        
+        // Then, parse the file structure to find additional components
+        const nodeComponents = this.extractComponentsFromNodes(fileData.document);
+        
+        // Merge components, avoiding duplicates
+        nodeComponents.forEach(nodeComponent => {
+          const existingComponent = components.find(c => c.key === nodeComponent.key);
+          if (!existingComponent) {
+            components.push(nodeComponent);
+          }
+        });
+        
+        return components;
+      }),
+      catchError(this.handleError)
+    );
+  }
+
+  /**
+   * Get components from the dedicated API endpoint
+   */
+  private getComponentsFromAPI(credentials: FigmaCredentials): Observable<FigmaComponent[]> {
     const headers = this.getHeaders(credentials.accessToken);
     
     return this.http.get<any>(
@@ -236,8 +335,43 @@ export class FigmaService {
         
         return components;
       }),
-      catchError(this.handleError)
+      catchError(() => {
+        // If the components API fails, return empty array
+        // We'll still get components from file parsing
+        return [];
+      })
     );
+  }
+
+  /**
+   * Extract components from file nodes by detecting COMPONENT and COMPONENT_SET types
+   */
+  private extractComponentsFromNodes(node: FigmaNode): FigmaComponent[] {
+    const components: FigmaComponent[] = [];
+
+    const traverse = (currentNode: FigmaNode) => {
+      // Check if node is a component or component set
+      if (currentNode.type === 'COMPONENT' || currentNode.type === 'COMPONENT_SET') {
+        components.push({
+          key: currentNode.id,
+          name: currentNode.name,
+          description: '', // Node description not typically available in file API
+          documentationLinks: [],
+          id: currentNode.id,
+          thumbnail: '', // Will be populated with image API
+          variants: currentNode.type === 'COMPONENT_SET' ? [] : undefined,
+          properties: []
+        });
+      }
+
+      // Traverse children
+      if (currentNode.children) {
+        currentNode.children.forEach(child => traverse(child));
+      }
+    };
+
+    traverse(node);
+    return components;
   }
 
   /**
@@ -449,11 +583,16 @@ export class FigmaService {
    * Extract color value from style
    */
   private extractColorValue(style: any): string {
+    // For FILL styles, the fill data is in the style object
     if (style.fills && style.fills.length > 0) {
       const fill = style.fills[0];
-      if (fill.color) {
-        return this.rgbToHex(fill.color.r, fill.color.g, fill.color.b);
+      if (fill.type === 'SOLID' && fill.color) {
+        return this.rgbaToHex(fill.color);
       }
+    }
+    // Sometimes the color might be directly on the style
+    if (style.color) {
+      return this.rgbaToHex(style.color);
     }
     return '#000000'; // fallback
   }
@@ -462,11 +601,17 @@ export class FigmaService {
    * Extract text value from style
    */
   private extractTextValue(style: any): string {
-    if (style.fontFamily && style.fontSize) {
+    // For TEXT styles, the typography data is directly in the style object
+    if (style.fontFamily || style.fontSize || style.fontWeight) {
       const fontFamily = style.fontFamily || 'Arial';
       const fontSize = style.fontSize || 16;
       const fontWeight = style.fontWeight || 400;
-      return `font-family: ${fontFamily}; font-size: ${fontSize}px; font-weight: ${fontWeight};`;
+      const lineHeight = style.lineHeightPx ? `${style.lineHeightPx}px` : 'normal';
+      return `font-family: "${fontFamily}"; font-size: ${fontSize}px; font-weight: ${fontWeight}; line-height: ${lineHeight};`;
+    }
+    // Sometimes text styles might be nested in a style property
+    if (style.style) {
+      return this.extractTextValue(style.style);
     }
     return 'font-family: Arial; font-size: 16px;'; // fallback
   }
