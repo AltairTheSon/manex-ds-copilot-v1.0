@@ -179,22 +179,30 @@ export class FigmaService {
    * Fetch local styles from Figma file
    */
   fetchLocalStyles(credentials: FigmaCredentials): Observable<LocalStyle[]> {
-    return this.getFileData(credentials).pipe(
-      map((fileData: FigmaFileResponse) => {
+    const headers = this.getHeaders(credentials.accessToken);
+    
+    return this.http.get<any>(
+      `${this.FIGMA_API_BASE}/files/${credentials.fileId}/styles`,
+      { headers }
+    ).pipe(
+      map((stylesResponse: any) => {
         const localStyles: LocalStyle[] = [];
         
-        Object.values(fileData.styles).forEach(style => {
-          localStyles.push({
-            id: style.key,
-            name: style.name,
-            type: style.styleType as 'FILL' | 'TEXT' | 'EFFECT',
-            description: style.description,
-            styleType: style.styleType
+        if (stylesResponse.meta && stylesResponse.meta.styles) {
+          Object.values(stylesResponse.meta.styles).forEach((style: any) => {
+            localStyles.push({
+              id: style.key,
+              name: style.name,
+              type: style.style_type as 'FILL' | 'TEXT' | 'EFFECT',
+              description: style.description || '',
+              styleType: style.style_type
+            });
           });
-        });
+        }
         
         return localStyles;
-      })
+      }),
+      catchError(this.handleError)
     );
   }
 
@@ -202,25 +210,33 @@ export class FigmaService {
    * Fetch components from Figma file
    */
   fetchComponents(credentials: FigmaCredentials): Observable<FigmaComponent[]> {
-    return this.getFileData(credentials).pipe(
-      map((fileData: FigmaFileResponse) => {
+    const headers = this.getHeaders(credentials.accessToken);
+    
+    return this.http.get<any>(
+      `${this.FIGMA_API_BASE}/files/${credentials.fileId}/components`,
+      { headers }
+    ).pipe(
+      map((componentsResponse: any) => {
         const components: FigmaComponent[] = [];
         
-        Object.values(fileData.components).forEach(component => {
-          components.push({
-            key: component.key,
-            name: component.name,
-            description: component.description,
-            documentationLinks: component.documentationLinks,
-            id: component.key,
-            thumbnail: '', // Will be populated with image API
-            variants: [],
-            properties: []
+        if (componentsResponse.meta && componentsResponse.meta.components) {
+          Object.values(componentsResponse.meta.components).forEach((component: any) => {
+            components.push({
+              key: component.key,
+              name: component.name,
+              description: component.description || '',
+              documentationLinks: component.documentation_links || [],
+              id: component.key,
+              thumbnail: '', // Will be populated with image API
+              variants: [],
+              properties: []
+            });
           });
-        });
+        }
         
         return components;
-      })
+      }),
+      catchError(this.handleError)
     );
   }
 
@@ -336,15 +352,31 @@ export class FigmaService {
   private extractDesignTokensFromFileData(fileData: FigmaFileResponse): DesignToken[] {
     const tokens: DesignToken[] = [];
     
-    // Process styles
+    // Process styles with proper value extraction
     Object.values(fileData.styles).forEach(style => {
       if (style.styleType === 'FILL') {
         tokens.push({
           type: 'color',
           name: style.name,
-          value: '#000000', // Placeholder - would need style details
+          value: this.extractColorValue(style),
           description: style.description,
           category: 'colors'
+        });
+      } else if (style.styleType === 'TEXT') {
+        tokens.push({
+          type: 'typography',
+          name: style.name,
+          value: this.extractTextValue(style),
+          description: style.description,
+          category: 'typography'
+        });
+      } else if (style.styleType === 'EFFECT') {
+        tokens.push({
+          type: 'shadow',
+          name: style.name,
+          value: this.extractEffectValue(style),
+          description: style.description,
+          category: 'effects'
         });
       }
     });
@@ -359,28 +391,9 @@ export class FigmaService {
    * Extract tokens from document nodes
    */
   private extractTokensFromNodes(node: FigmaNode, tokens: DesignToken[]) {
-    const uniqueColors = new Set<string>();
     const uniqueFonts = new Set<string>();
 
     const traverse = (currentNode: FigmaNode) => {
-      // Extract colors from fills
-      if (currentNode.fills) {
-        currentNode.fills.forEach(fill => {
-          if (fill.type === 'SOLID' && fill.color) {
-            const colorValue = this.rgbaToHex(fill.color);
-            if (!uniqueColors.has(colorValue)) {
-              uniqueColors.add(colorValue);
-              tokens.push({
-                type: 'color',
-                name: `Color ${uniqueColors.size}`,
-                value: colorValue,
-                category: 'extracted-colors'
-              });
-            }
-          }
-        });
-      }
-
       // Extract typography information
       if (currentNode.style && currentNode.style.fontFamily) {
         const fontKey = `${currentNode.style.fontFamily}-${currentNode.style.fontSize}`;
@@ -433,24 +446,57 @@ export class FigmaService {
   }
 
   /**
-   * Extract color value from style (placeholder implementation)
+   * Extract color value from style
    */
   private extractColorValue(style: any): string {
-    return '#000000'; // Placeholder
+    if (style.fills && style.fills.length > 0) {
+      const fill = style.fills[0];
+      if (fill.color) {
+        return this.rgbToHex(fill.color.r, fill.color.g, fill.color.b);
+      }
+    }
+    return '#000000'; // fallback
   }
 
   /**
-   * Extract text value from style (placeholder implementation)
+   * Extract text value from style
    */
   private extractTextValue(style: any): string {
-    return 'font-family: Arial; font-size: 16px;'; // Placeholder
+    if (style.fontFamily && style.fontSize) {
+      const fontFamily = style.fontFamily || 'Arial';
+      const fontSize = style.fontSize || 16;
+      const fontWeight = style.fontWeight || 400;
+      return `font-family: ${fontFamily}; font-size: ${fontSize}px; font-weight: ${fontWeight};`;
+    }
+    return 'font-family: Arial; font-size: 16px;'; // fallback
   }
 
   /**
-   * Extract effect value from style (placeholder implementation)
+   * Extract effect value from style
    */
   private extractEffectValue(style: any): string {
-    return 'box-shadow: 0 2px 4px rgba(0,0,0,0.1);'; // Placeholder
+    if (style.effects && style.effects.length > 0) {
+      const effect = style.effects[0];
+      if (effect.type === 'DROP_SHADOW' && effect.offset && effect.color) {
+        const x = effect.offset.x || 0;
+        const y = effect.offset.y || 0;
+        const blur = effect.radius || 4;
+        const color = this.rgbaToHex(effect.color);
+        return `box-shadow: ${x}px ${y}px ${blur}px ${color};`;
+      }
+    }
+    return 'box-shadow: 0 2px 4px rgba(0,0,0,0.1);'; // fallback
+  }
+
+  /**
+   * Convert RGB to hex (helper function)
+   */
+  private rgbToHex(r: number, g: number, b: number): string {
+    const toHex = (n: number) => {
+      const hex = Math.round(n * 255).toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    };
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
   }
 
   /**

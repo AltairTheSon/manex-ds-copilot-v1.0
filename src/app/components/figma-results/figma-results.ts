@@ -24,6 +24,30 @@ export class FigmaResults {
     this.selectedTab = tab;
   }
 
+  // Sync functionality methods
+  syncNow(): void {
+    console.log('Sync now clicked');
+    // TODO: Implement actual sync logic
+    this.syncStatus.lastSynced = new Date().toISOString();
+  }
+
+  viewSyncHistory(): void {
+    console.log('View sync history clicked');
+    // TODO: Implement sync history view
+  }
+
+  openSyncSettings(): void {
+    console.log('Open sync settings clicked');
+    // TODO: Implement sync settings
+  }
+
+  toggleAutoSync(event: Event): void {
+    const target = event.target as HTMLInputElement;
+    this.syncStatus.isAutoSync = target.checked;
+    console.log('Auto sync toggled:', this.syncStatus.isAutoSync);
+    // TODO: Implement auto sync logic
+  }
+
   getTokensByCategory(category: string): DesignToken[] {
     return this.designTokens.filter(token => token.category === category);
   }

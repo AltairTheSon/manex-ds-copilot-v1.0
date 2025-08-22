@@ -5,7 +5,7 @@ import { HttpClientModule } from '@angular/common/http';
 import { FigmaForm } from './components/figma-form/figma-form';
 import { FigmaResults } from './components/figma-results/figma-results';
 import { FigmaService } from './services/figma.service';
-import { FigmaCredentials, ProcessedArtboard, DesignToken } from './interfaces/figma.interface';
+import { FigmaCredentials, ProcessedArtboard, DesignToken, FigmaPage, LocalStyle, FigmaComponent } from './interfaces/figma.interface';
 
 @Component({
   selector: 'app-root',
@@ -20,7 +20,11 @@ export class App {
   title = 'figma-ds-copilot';
   artboards: ProcessedArtboard[] = [];
   designTokens: DesignToken[] = [];
+  pages: FigmaPage[] = [];
+  localStyles: LocalStyle[] = [];
+  components: FigmaComponent[] = [];
   fileInfo: { name: string; lastModified: string; version: string } | null = null;
+  syncStatus: { lastSynced: string; isAutoSync: boolean } = { lastSynced: '', isAutoSync: false };
   isLoading = false;
   error: string | null = null;
 
@@ -30,9 +34,14 @@ export class App {
     this.isLoading = true;
     this.error = null;
     
-    this.figmaService.extractDesignTokens(credentials).subscribe({
-      next: (tokens) => {
-        this.designTokens = tokens;
+    this.figmaService.getEnhancedAnalysis(credentials).subscribe({
+      next: (data) => {
+        this.pages = data.pages;
+        this.designTokens = data.designTokens;
+        this.localStyles = data.localStyles;
+        this.components = data.components;
+        this.artboards = data.artboards;
+        this.fileInfo = data.fileInfo;
         this.isLoading = false;
         this.figmaForm.setLoading(false);
       },
