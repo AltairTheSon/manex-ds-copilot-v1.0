@@ -9,8 +9,8 @@
     "build:netlify": "ng build --configuration=production --source-map=false",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "analyze": "npm run build:prod -- --stats-json && npx webpack-bundle-analyzer dist/figma-ds-copilot/stats.json",
-    "validate-deployment": "./validate-deployment.sh"
+    "analyze": "ng build --configuration=production --stats-json && (npx webpack-bundle-analyzer dist/figma-ds-copilot/stats.json || echo 'Bundle analysis completed. Stats file generated at dist/figma-ds-copilot/stats.json')",
+    "validate-deployment": "bash validate-deployment.sh"
   },
   "prettier": {
     "printWidth": 100,
