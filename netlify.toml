@@ -1,10 +1,10 @@
 [build]
-  publish = "dist/figma-ds-copilot/browser"
+  publish = "dist/manex-ds-copilot/browser"
   command = "npm run build:netlify"
 
 [build.environment]
-  NODE_VERSION = "18"
-  NPM_VERSION = "9"
+  NODE_VERSION = "20"
+  NPM_VERSION = "10"
   CI = "true"
   NODE_ENV = "production"
 
