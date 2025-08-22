@@ -5,6 +5,7 @@ import { FigmaCredentials, MCPCredentials, ConnectionRequest } from '../../inter
 
 @Component({
   selector: 'app-figma-form',
+  standalone: true,
   imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './figma-form.html',
   styleUrl: './figma-form.scss'

@@ -11,6 +11,7 @@ import { FigmaCredentials, MCPCredentials, ProcessedArtboard, DesignToken, Figma
 
 @Component({
   selector: 'app-root',
+  standalone: true,
   imports: [CommonModule, RouterModule, HttpClientModule, FigmaForm, FigmaResults],
   templateUrl: './app.html',
   styleUrl: './app.scss',

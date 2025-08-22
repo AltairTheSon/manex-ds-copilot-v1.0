@@ -70,7 +70,7 @@
             <img 
               [src]="page.thumbnail" 
               [alt]="page.name"
-              (error)="$event.target.style.display='none'"
+              (error)="onImageError($event)"
               loading="lazy"
             />
             <div class="page-overlay">
@@ -132,7 +132,7 @@
             <img 
               [src]="artboard.thumbnail" 
               [alt]="artboard.name"
-              (error)="$event.target.style.display='none'"
+              (error)="onImageError($event)"
               loading="lazy"
             />
             <div class="artboard-overlay">
@@ -230,7 +230,7 @@
             <img 
               [src]="component.thumbnail || 'assets/component-placeholder.png'" 
               [alt]="component.name"
-              (error)="$event.target.style.display='none'"
+              (error)="onImageError($event)"
               loading="lazy"
             />
             <div class="component-overlay" *ngIf="component.variants && component.variants.length">

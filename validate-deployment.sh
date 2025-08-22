@@ -16,7 +16,7 @@ if [ ! -f "dist/figma-ds-copilot/browser/index.html" ]; then
 fi
 
 # Check if main JS files exist
-if [ ! -f dist/figma-ds-copilot/browser/main-*.js ]; then
+if [ ! -f dist/figma-ds-copilot/browser/main*.js ]; then
     echo "❌ Main JavaScript bundle not found"
     exit 1
 fi
