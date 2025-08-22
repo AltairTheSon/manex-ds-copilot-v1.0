@@ -5,10 +5,10 @@
     "ng": "ng",
     "start": "ng serve",
     "build": "ng build",
-    "build:prod": "ng build --configuration=production",
-    "build:netlify": "ng build --configuration=production --source-map=false",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
+    "build:netlify": "ng build --configuration=production --source-map=false --output-path=dist/figma-ds-copilot",
+    "build:prod": "ng build --configuration=production",
     "analyze": "ng build --configuration=production --stats-json && (npx webpack-bundle-analyzer dist/figma-ds-copilot/stats.json || echo 'Bundle analysis completed. Stats file generated at dist/figma-ds-copilot/stats.json')",
     "validate-deployment": "bash validate-deployment.sh"
   },
