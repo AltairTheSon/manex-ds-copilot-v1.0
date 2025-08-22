@@ -1,6 +1,11 @@
 <div class="app-container">
 
   <main class="app-main">
+    <div *ngIf="isRestoringConnection" class="connection-restore-banner">
+      <i class="ri-refresh-line"></i>
+      <span>Restoring previous connection...</span>
+    </div>
+
     <app-figma-form 
       (onConnect)="onConnect($event)"
       [isLoading]="isLoading">

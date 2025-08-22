@@ -3,11 +3,36 @@
     <div class="header-icon">
       <i class="ri-palette-line"></i>
     </div>
-    <h1 class="header-title">Connect to Figma</h1>
-    <p class="header-subtitle">Extract design tokens and artboards from your Figma files</p>
+    <h1 class="header-title">Connect to Design System</h1>
+    <p class="header-subtitle">Extract design tokens and artboards from your design files</p>
   </div>
 
-  <form [formGroup]="figmaForm" (ngSubmit)="onSubmit()" class="figma-form">
+  <!-- Connection Type Selector -->
+  <div class="connection-type-selector">
+    <button 
+      type="button"
+      class="type-button"
+      [class.active]="connectionType === 'figma'"
+      (click)="switchConnectionType('figma')">
+      <i class="ri-palette-line"></i>
+      Figma
+    </button>
+    <button 
+      type="button"
+      class="type-button"
+      [class.active]="connectionType === 'mcp'"
+      (click)="switchConnectionType('mcp')">
+      <i class="ri-server-line"></i>
+      MCP Server
+    </button>
+  </div>
+
+  <!-- Figma Form -->
+  <form 
+    *ngIf="connectionType === 'figma'" 
+    [formGroup]="figmaForm" 
+    (ngSubmit)="onSubmit()" 
+    class="connection-form">
     <div class="form-group">
       <label for="accessToken" class="form-label">
         <i class="ri-key-2-line"></i>
@@ -48,7 +73,6 @@
         class="form-input"
         [class.error]="getFieldError('fileId')"
         placeholder="Enter the Figma file ID"
-        autocomplete="off"
       />
       <div class="field-hint">
         Copy from the URL: figma.com/file/<strong>FILE_ID</strong>/filename
@@ -61,18 +85,105 @@
       }
     </div>
 
-    <button
-      type="submit"
-      class="connect-button"
+    <button 
+      type="submit" 
+      class="submit-button"
       [disabled]="!figmaForm.valid || isLoading"
-      [class.loading]="isLoading"
-    >
+      [class.loading]="isLoading">
       @if (isLoading) {
-        <i class="ri-loader-4-line loading-spinner"></i>
-        Connecting...
+        <i class="ri-loader-4-line"></i>
+        <span>Connecting...</span>
       } @else {
         <i class="ri-link"></i>
-        Connect to Figma
+        <span>Connect to Figma</span>
+      }
+    </button>
+  </form>
+
+  <!-- MCP Form -->
+  <form 
+    *ngIf="connectionType === 'mcp'" 
+    [formGroup]="mcpForm" 
+    (ngSubmit)="onSubmit()" 
+    class="connection-form">
+    <div class="form-group">
+      <label for="serverUrl" class="form-label">
+        <i class="ri-server-line"></i>
+        MCP Server URL
+      </label>
+      <input
+        id="serverUrl"
+        type="text"
+        formControlName="serverUrl"
+        class="form-input"
+        [class.error]="getFieldError('serverUrl')"
+        placeholder="https://your-mcp-server.com"
+        autocomplete="off"
+      />
+      <div class="field-hint">
+        Enter the URL of your MCP server endpoint
+      </div>
+      @if (getFieldError('serverUrl')) {
+        <div class="field-error">
+          <i class="ri-error-warning-line"></i>
+          {{ getFieldError('serverUrl') }}
+        </div>
+      }
+    </div>
+
+    <div class="form-group">
+      <label for="apiKey" class="form-label">
+        <i class="ri-key-2-line"></i>
+        API Key (Optional)
+      </label>
+      <input
+        id="apiKey"
+        type="password"
+        formControlName="apiKey"
+        class="form-input"
+        placeholder="Enter your API key if required"
+        autocomplete="off"
+      />
+      <div class="field-hint">
+        Leave empty if your MCP server doesn't require authentication
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="projectId" class="form-label">
+        <i class="ri-folder-3-line"></i>
+        Project ID
+      </label>
+      <input
+        id="projectId"
+        type="text"
+        formControlName="projectId"
+        class="form-input"
+        [class.error]="getFieldError('projectId')"
+        placeholder="Enter the project identifier"
+      />
+      <div class="field-hint">
+        The unique identifier for your design project
+      </div>
+      @if (getFieldError('projectId')) {
+        <div class="field-error">
+          <i class="ri-error-warning-line"></i>
+          {{ getFieldError('projectId') }}
+        </div>
+      }
+    </div>
+
+    <button 
+      type="submit" 
+      class="submit-button"
+      [disabled]="!mcpForm.valid || isLoading"
+      [class.loading]="isLoading">
+      @if (isLoading) {
+        <i class="ri-loader-4-line"></i>
+        <span>Connecting...</span>
+      } @else {
+        <i class="ri-link"></i>
+        <span>Connect to MCP Server</span>
       }
     </button>
   </form>
