@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-error.log
+
+# Build artifacts
+*.tgz
+*.tar.gz
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+docs/
+
+# Source files (only built files needed)
+src/
+*.ts
+*.scss
+
+# Test files
+*.spec.ts
+karma.conf.js
+tsconfig.spec.json
+
+# Angular cache
+.angular/
