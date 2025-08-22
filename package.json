@@ -7,7 +7,7 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "build:netlify": "npx ng build --configuration=production --source-map=false",
+    "build:netlify": "ng build --configuration=production --source-map=false",
     "build:prod": "ng build --configuration=production",
     "analyze": "ng build --configuration=production --stats-json && echo 'Bundle analysis completed. Stats file generated at dist/figma-ds-copilot/stats.json' && echo 'You can analyze the build using https://esbuild.github.io/analyze/'",
     "validate-deployment": "bash validate-deployment.sh"
