@@ -208,7 +208,7 @@
           <h3>Sync Status</h3>
           <div class="sync-toggle">
             <label class="toggle-switch">
-              <input type="checkbox" [checked]="syncStatus.isAutoSync">
+              <input type="checkbox" [checked]="syncStatus.isAutoSync" (change)="toggleAutoSync($event)">
               <span class="toggle-slider"></span>
             </label>
             <span class="toggle-label">Auto Sync</span>
@@ -229,15 +229,15 @@
       </div>
 
       <div class="sync-actions">
-        <button class="sync-button primary">
+        <button class="sync-button primary" (click)="syncNow()">
           <i class="ri-refresh-line"></i>
           Sync Now
         </button>
-        <button class="sync-button secondary">
+        <button class="sync-button secondary" (click)="viewSyncHistory()">
           <i class="ri-history-line"></i>
           View History
         </button>
-        <button class="sync-button secondary">
+        <button class="sync-button secondary" (click)="openSyncSettings()">
           <i class="ri-settings-3-line"></i>
           Sync Settings
         </button>
