@@ -4,6 +4,7 @@ import { ProcessedArtboard, DesignToken, FigmaPage, LocalStyle, FigmaComponent, 
 
 @Component({
   selector: 'app-figma-results',
+  standalone: true,
   imports: [CommonModule],
   templateUrl: './figma-results.html',
   styleUrl: './figma-results.scss'
@@ -130,6 +131,13 @@ export class FigmaResults {
       hour: '2-digit',
       minute: '2-digit'
     });
+  }
+
+  onImageError(event: Event): void {
+    const target = event.target as HTMLImageElement;
+    if (target) {
+      target.style.display = 'none';
+    }
   }
 
   downloadTokensAsCSV(): void {
