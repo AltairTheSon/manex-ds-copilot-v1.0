@@ -1,6 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ProcessedArtboard, DesignToken } from '../../interfaces/figma.interface';
+import { ProcessedArtboard, DesignToken, FigmaPage, LocalStyle, FigmaComponent, FigmaFileData } from '../../interfaces/figma.interface';
 
 @Component({
   selector: 'app-figma-results',
@@ -11,12 +11,16 @@ import { ProcessedArtboard, DesignToken } from '../../interfaces/figma.interface
 export class FigmaResults {
   @Input() artboards: ProcessedArtboard[] = [];
   @Input() designTokens: DesignToken[] = [];
+  @Input() pages: FigmaPage[] = [];
+  @Input() localStyles: LocalStyle[] = [];
+  @Input() components: FigmaComponent[] = [];
   @Input() fileInfo: { name: string; lastModified: string; version: string } | null = null;
   @Input() isLoading = false;
+  @Input() syncStatus: { lastSynced: string; isAutoSync: boolean } = { lastSynced: '', isAutoSync: false };
 
-  selectedTab: 'artboards' | 'tokens' = 'artboards';
+  selectedTab: 'pages' | 'tokens' | 'components' | 'sync' = 'pages';
 
-  selectTab(tab: 'artboards' | 'tokens'): void {
+  selectTab(tab: 'pages' | 'tokens' | 'components' | 'sync'): void {
     this.selectedTab = tab;
   }
 
@@ -27,6 +31,14 @@ export class FigmaResults {
   getUniqueCategories(): string[] {
     const categories = this.designTokens.map(token => token.category || 'uncategorized');
     return [...new Set(categories)];
+  }
+
+  getStylesByType(type: 'FILL' | 'TEXT' | 'EFFECT'): LocalStyle[] {
+    return this.localStyles.filter(style => style.type === type);
+  }
+
+  getComponentsWithVariants(): FigmaComponent[] {
+    return this.components.filter(component => component.variants && component.variants.length > 0);
   }
 
   formatDate(dateString: string): string {
