@@ -3,6 +3,25 @@ export interface FigmaCredentials {
   fileId: string;
 }
 
+export interface MCPCredentials {
+  serverUrl: string;
+  apiKey?: string;
+  projectId: string;
+}
+
+export interface StoredConnection {
+  connectionType: 'figma' | 'mcp';
+  credentials: FigmaCredentials | MCPCredentials;
+  fileInfo: { name: string; lastModified: string; version: string };
+  lastConnected: string;
+  isValid: boolean;
+}
+
+export interface ConnectionOptions {
+  figma: FigmaCredentials;
+  mcp: MCPCredentials;
+}
+
 export interface FigmaFileResponse {
   document: FigmaNode;
   components: { [key: string]: FigmaComponent };

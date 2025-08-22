@@ -36,6 +36,13 @@ export class FigmaForm {
     this.isLoading = loading;
   }
 
+  setCredentials(credentials: FigmaCredentials): void {
+    this.figmaForm.patchValue({
+      accessToken: credentials.accessToken,
+      fileId: credentials.fileId
+    });
+  }
+
   getFieldError(fieldName: string): string | null {
     const field = this.figmaForm.get(fieldName);
     if (field && field.invalid && (field.dirty || field.touched)) {

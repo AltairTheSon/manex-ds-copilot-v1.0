@@ -1,20 +1,21 @@
-import { Component, ViewChild } from '@angular/core';
+import { Component, ViewChild, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { HttpClientModule } from '@angular/common/http';
 import { FigmaForm } from './components/figma-form/figma-form';
 import { FigmaResults } from './components/figma-results/figma-results';
 import { FigmaService } from './services/figma.service';
-import { FigmaCredentials, ProcessedArtboard, DesignToken, FigmaPage, LocalStyle, FigmaComponent, Artboard } from './interfaces/figma.interface';
+import { ConnectionPersistenceService } from './services/connection-persistence.service';
+import { FigmaCredentials, ProcessedArtboard, DesignToken, FigmaPage, LocalStyle, FigmaComponent, Artboard, StoredConnection } from './interfaces/figma.interface';
 
 @Component({
   selector: 'app-root',
   imports: [CommonModule, RouterModule, HttpClientModule, FigmaForm, FigmaResults],
   templateUrl: './app.html',
   styleUrl: './app.scss',
-  providers: [FigmaService]
+  providers: [FigmaService, ConnectionPersistenceService]
 })
-export class App {
+export class App implements OnInit {
   @ViewChild(FigmaForm) figmaForm!: FigmaForm;
   @ViewChild(FigmaResults) figmaResults!: FigmaResults;
   
@@ -29,13 +30,74 @@ export class App {
   isLoading = false;
   error: string | null = null;
   currentCredentials: FigmaCredentials | null = null;
+  isRestoringConnection = false;
 
-  constructor(private figmaService: FigmaService) {}
+  constructor(
+    private figmaService: FigmaService,
+    private connectionPersistence: ConnectionPersistenceService
+  ) {}
+
+  ngOnInit(): void {
+    this.attemptConnectionRestore();
+  }
+
+  /**
+   * Attempt to restore connection from stored data
+   */
+  private attemptConnectionRestore(): void {
+    if (this.connectionPersistence.hasValidStoredConnection()) {
+      const storedConnection = this.connectionPersistence.getStoredConnection();
+      
+      if (storedConnection && storedConnection.connectionType === 'figma') {
+        this.isRestoringConnection = true;
+        const credentials = storedConnection.credentials as FigmaCredentials;
+        
+        // Validate connection by making a quick API call
+        this.figmaService.syncFileChanges(credentials).subscribe({
+          next: (hasChanges) => {
+            // Connection is valid, restore the full state
+            this.restoreConnectionData(storedConnection, credentials);
+          },
+          error: (error) => {
+            console.log('Stored connection is no longer valid:', error);
+            this.connectionPersistence.updateConnectionValidity(false);
+            this.isRestoringConnection = false;
+          }
+        });
+      }
+    }
+  }
+
+  /**
+   * Restore connection data and fetch fresh information
+   */
+  private restoreConnectionData(storedConnection: StoredConnection, credentials: FigmaCredentials): void {
+    this.currentCredentials = credentials;
+    
+    // Pre-populate form with restored credentials
+    if (this.figmaForm) {
+      this.figmaForm.setCredentials(credentials);
+    }
+    
+    // Fetch fresh data
+    this.connectWithCredentials(credentials, true);
+  }
 
   onConnect(credentials: FigmaCredentials): void {
+    this.connectWithCredentials(credentials, false);
+  }
+
+  /**
+   * Connect with credentials and optionally mark as restored connection
+   */
+  private connectWithCredentials(credentials: FigmaCredentials, isRestore: boolean = false): void {
     this.currentCredentials = credentials;
     this.isLoading = true;
     this.error = null;
+    
+    if (!isRestore && this.figmaForm) {
+      this.figmaForm.setLoading(true);
+    }
     
     this.figmaService.getEnhancedAnalysis(credentials).subscribe({
       next: (data) => {
@@ -46,12 +108,35 @@ export class App {
         this.artboards = data.artboards;
         this.fileInfo = data.fileInfo;
         this.isLoading = false;
-        this.figmaForm.setLoading(false);
+        this.isRestoringConnection = false;
+        
+        if (this.figmaForm) {
+          this.figmaForm.setLoading(false);
+        }
+
+        // Store successful connection
+        if (this.fileInfo) {
+          const storedConnection = this.connectionPersistence.createStoredConnection(
+            'figma',
+            credentials,
+            this.fileInfo
+          );
+          this.connectionPersistence.storeConnection(storedConnection);
+        }
       },
       error: (error) => {
         this.error = error.message || 'An error occurred while connecting to Figma';
         this.isLoading = false;
-        this.figmaForm.setLoading(false);
+        this.isRestoringConnection = false;
+        
+        if (this.figmaForm) {
+          this.figmaForm.setLoading(false);
+        }
+
+        // Mark stored connection as invalid if this was a restore attempt
+        if (isRestore) {
+          this.connectionPersistence.updateConnectionValidity(false);
+        }
       }
     });
   }
