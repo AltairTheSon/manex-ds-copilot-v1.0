@@ -9,7 +9,7 @@
     "test": "ng test",
     "build:netlify": "ng build --configuration=production --source-map=false --output-path=dist/figma-ds-copilot",
     "build:prod": "ng build --configuration=production",
-    "analyze": "ng build --configuration=production --stats-json && (npx webpack-bundle-analyzer dist/figma-ds-copilot/stats.json || echo 'Bundle analysis completed. Stats file generated at dist/figma-ds-copilot/stats.json')",
+    "analyze": "ng build --configuration=production --stats-json && echo 'Bundle analysis completed. Stats file generated at dist/figma-ds-copilot/stats.json' && echo 'You can analyze the build using https://esbuild.github.io/analyze/'",
     "validate-deployment": "bash validate-deployment.sh"
   },
   "prettier": {
