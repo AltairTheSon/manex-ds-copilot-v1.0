@@ -179,3 +179,16 @@ export interface ComponentProperty {
   defaultValue?: string;
   variantOptions?: string[];
 }
+
+export interface Artboard {
+  id: string;
+  name: string;
+  type: 'FRAME';
+  thumbnail: string;
+  absoluteBoundingBox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}

@@ -62,40 +62,108 @@
 
   <!-- Pages Tab -->
   <div class="tab-content" *ngIf="selectedTab === 'pages'">
-    <div class="pages-grid" *ngIf="pages.length > 0; else noPages">
-      <div class="page-card" *ngFor="let page of pages">
-        <div class="page-image">
-          <img 
-            [src]="page.thumbnail" 
-            [alt]="page.name"
-            (error)="$event.target.style.display='none'"
-            loading="lazy"
-          />
-          <div class="page-overlay">
-            <div class="page-children-count">
-              {{ page.children?.length || 0 }} frames
+    <!-- Pages List View -->
+    <div *ngIf="!selectedPage">
+      <div class="pages-grid" *ngIf="pages.length > 0; else noPages">
+        <div class="page-card" *ngFor="let page of pages" (click)="onPageClick(page)">
+          <div class="page-image">
+            <img 
+              [src]="page.thumbnail" 
+              [alt]="page.name"
+              (error)="$event.target.style.display='none'"
+              loading="lazy"
+            />
+            <div class="page-overlay">
+              <div class="page-children-count">
+                {{ page.children?.length || 0 }} frames
+              </div>
             </div>
           </div>
-        </div>
-        <div class="page-info">
-          <h3 class="page-name">{{ page.name }}</h3>
-          <div class="page-details">
-            <div class="detail-item">
-              <i class="ri-layout-grid-line"></i>
-              {{ page.children?.length || 0 }} frames
+          <div class="page-info">
+            <h3 class="page-name">{{ page.name }}</h3>
+            <div class="page-details">
+              <div class="detail-item">
+                <i class="ri-layout-grid-line"></i>
+                {{ page.children?.length || 0 }} frames
+              </div>
+              <div class="detail-item">
+                <i class="ri-cursor-line"></i>
+                Click to view artboards
+              </div>
             </div>
           </div>
         </div>
       </div>
+
+      <ng-template #noPages>
+        <div class="empty-state">
+          <i class="ri-file-copy-2-line"></i>
+          <h3>No Pages Found</h3>
+          <p>This Figma file doesn't contain any pages or they couldn't be loaded.</p>
+        </div>
+      </ng-template>
     </div>
 
-    <ng-template #noPages>
-      <div class="empty-state">
-        <i class="ri-file-copy-2-line"></i>
-        <h3>No Pages Found</h3>
-        <p>This Figma file doesn't contain any pages or they couldn't be loaded.</p>
+    <!-- Page Artboards View -->
+    <div *ngIf="selectedPage">
+      <div class="page-artboards-header">
+        <button class="back-button" (click)="backToPages()">
+          <i class="ri-arrow-left-line"></i>
+          Back to Pages
+        </button>
+        <div class="page-info">
+          <h2 class="page-title">{{ selectedPage.name }}</h2>
+          <p class="page-subtitle">Artboards within this page</p>
+        </div>
       </div>
-    </ng-template>
+
+      <!-- Loading state for artboards -->
+      <div class="loading-artboards" *ngIf="isLoadingArtboards">
+        <div class="loading-spinner">
+          <i class="ri-loader-4-line"></i>
+        </div>
+        <p>Loading artboards...</p>
+      </div>
+
+      <!-- Artboards Grid -->
+      <div class="artboards-grid" *ngIf="!isLoadingArtboards && pageArtboards.length > 0">
+        <div class="artboard-card" *ngFor="let artboard of pageArtboards">
+          <div class="artboard-image">
+            <img 
+              [src]="artboard.thumbnail" 
+              [alt]="artboard.name"
+              (error)="$event.target.style.display='none'"
+              loading="lazy"
+            />
+            <div class="artboard-overlay">
+              <div class="artboard-dimensions">
+                {{ artboard.absoluteBoundingBox.width }}×{{ artboard.absoluteBoundingBox.height }}
+              </div>
+            </div>
+          </div>
+          <div class="artboard-info">
+            <h3 class="artboard-name">{{ artboard.name }}</h3>
+            <div class="artboard-details">
+              <div class="detail-item">
+                <i class="ri-ruler-line"></i>
+                {{ artboard.absoluteBoundingBox.width }}×{{ artboard.absoluteBoundingBox.height }}
+              </div>
+              <div class="detail-item">
+                <i class="ri-layout-2-line"></i>
+                {{ artboard.type }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- No artboards found -->
+      <div class="empty-state" *ngIf="!isLoadingArtboards && pageArtboards.length === 0">
+        <i class="ri-layout-grid-line"></i>
+        <h3>No Artboards Found</h3>
+        <p>This page doesn't contain any frame artboards.</p>
+      </div>
+    </div>
   </div>
 
   <!-- Design Tokens Tab -->
@@ -270,5 +338,112 @@
     </div>
     <h2>Processing Figma File...</h2>
     <p>Extracting artboards and design tokens from your file</p>
+  </div>
+</div>
+
+<!-- Sync History Modal -->
+<div class="modal-overlay" *ngIf="showSyncHistoryModal" (click)="closeSyncHistoryModal()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Sync History</h3>
+      <button class="modal-close" (click)="closeSyncHistoryModal()">
+        <i class="ri-close-line"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="sync-history-list">
+        <div class="history-item">
+          <div class="history-icon">
+            <i class="ri-check-line"></i>
+          </div>
+          <div class="history-details">
+            <h4>Successful Sync</h4>
+            <p>Updated 5 design tokens and 3 components</p>
+            <span class="history-time">2 hours ago</span>
+          </div>
+        </div>
+        <div class="history-item">
+          <div class="history-icon">
+            <i class="ri-check-line"></i>
+          </div>
+          <div class="history-details">
+            <h4>Successful Sync</h4>
+            <p>Updated 2 color tokens</p>
+            <span class="history-time">1 day ago</span>
+          </div>
+        </div>
+        <div class="history-item">
+          <div class="history-icon error">
+            <i class="ri-close-line"></i>
+          </div>
+          <div class="history-details">
+            <h4>Sync Failed</h4>
+            <p>Connection timeout - please try again</p>
+            <span class="history-time">2 days ago</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Sync Settings Modal -->
+<div class="modal-overlay" *ngIf="showSyncSettingsModal" (click)="closeSyncSettingsModal()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Sync Settings</h3>
+      <button class="modal-close" (click)="closeSyncSettingsModal()">
+        <i class="ri-close-line"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="setting-group">
+        <h4>Auto Sync</h4>
+        <div class="setting-item">
+          <label class="toggle-switch">
+            <input type="checkbox" [checked]="syncStatus.isAutoSync" (change)="toggleAutoSync($event)">
+            <span class="toggle-slider"></span>
+          </label>
+          <div class="setting-info">
+            <span class="setting-label">Enable Auto Sync</span>
+            <p class="setting-description">Automatically sync changes when detected in Figma file</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="setting-group">
+        <h4>Sync Frequency</h4>
+        <div class="setting-item">
+          <select class="setting-select">
+            <option value="5">Every 5 minutes</option>
+            <option value="15" selected>Every 15 minutes</option>
+            <option value="30">Every 30 minutes</option>
+            <option value="60">Every hour</option>
+          </select>
+          <div class="setting-info">
+            <span class="setting-label">Check for changes</span>
+            <p class="setting-description">How often to check for file updates</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <h4>Notifications</h4>
+        <div class="setting-item">
+          <label class="toggle-switch">
+            <input type="checkbox" checked>
+            <span class="toggle-slider"></span>
+          </label>
+          <div class="setting-info">
+            <span class="setting-label">Desktop Notifications</span>
+            <p class="setting-description">Show notifications when sync completes</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn secondary" (click)="closeSyncSettingsModal()">Cancel</button>
+      <button class="btn primary" (click)="closeSyncSettingsModal()">Save Settings</button>
+    </div>
   </div>
 </div>
