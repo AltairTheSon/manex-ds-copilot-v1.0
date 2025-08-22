@@ -11,7 +11,11 @@ import {
   DesignToken,
   FigmaApiError,
   FigmaColor,
-  FigmaFill
+  FigmaFill,
+  FigmaPage,
+  LocalStyle,
+  FigmaComponent,
+  FigmaFileData
 } from '../interfaces/figma.interface';
 
 @Injectable({
@@ -134,6 +138,160 @@ export class FigmaService {
       fileData: this.getFileData(credentials)
     }).pipe(
       map(({ artboards, fileData }) => ({
+        artboards,
+        designTokens: this.extractDesignTokensFromFileData(fileData),
+        fileInfo: {
+          name: fileData.name,
+          lastModified: fileData.lastModified,
+          version: fileData.version
+        }
+      }))
+    );
+  }
+
+  /**
+   * Fetch pages from Figma file
+   */
+  fetchPages(credentials: FigmaCredentials): Observable<FigmaPage[]> {
+    return this.getFileData(credentials).pipe(
+      map((fileData: FigmaFileResponse) => {
+        const pages: FigmaPage[] = [];
+        
+        if (fileData.document.children) {
+          fileData.document.children.forEach(page => {
+            if (page.type === 'CANVAS') {
+              pages.push({
+                id: page.id,
+                name: page.name,
+                thumbnail: '', // Will be populated with image API
+                children: page.children || []
+              });
+            }
+          });
+        }
+        
+        return pages;
+      })
+    );
+  }
+
+  /**
+   * Fetch local styles from Figma file
+   */
+  fetchLocalStyles(credentials: FigmaCredentials): Observable<LocalStyle[]> {
+    return this.getFileData(credentials).pipe(
+      map((fileData: FigmaFileResponse) => {
+        const localStyles: LocalStyle[] = [];
+        
+        Object.values(fileData.styles).forEach(style => {
+          localStyles.push({
+            id: style.key,
+            name: style.name,
+            type: style.styleType as 'FILL' | 'TEXT' | 'EFFECT',
+            description: style.description,
+            styleType: style.styleType
+          });
+        });
+        
+        return localStyles;
+      })
+    );
+  }
+
+  /**
+   * Fetch components from Figma file
+   */
+  fetchComponents(credentials: FigmaCredentials): Observable<FigmaComponent[]> {
+    return this.getFileData(credentials).pipe(
+      map((fileData: FigmaFileResponse) => {
+        const components: FigmaComponent[] = [];
+        
+        Object.values(fileData.components).forEach(component => {
+          components.push({
+            key: component.key,
+            name: component.name,
+            description: component.description,
+            documentationLinks: component.documentationLinks,
+            id: component.key,
+            thumbnail: '', // Will be populated with image API
+            variants: [],
+            properties: []
+          });
+        });
+        
+        return components;
+      })
+    );
+  }
+
+  /**
+   * Store Figma data in localStorage
+   */
+  storeLocalData(data: FigmaFileData): void {
+    try {
+      localStorage.setItem('figma-file-data', JSON.stringify(data));
+    } catch (error) {
+      console.error('Failed to store Figma data:', error);
+    }
+  }
+
+  /**
+   * Get stored Figma data from localStorage
+   */
+  getStoredData(): FigmaFileData | null {
+    try {
+      const data = localStorage.getItem('figma-file-data');
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error('Failed to retrieve stored Figma data:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Sync file changes with stored data
+   */
+  syncFileChanges(credentials: FigmaCredentials): Observable<boolean> {
+    return this.getFileData(credentials).pipe(
+      map((fileData: FigmaFileResponse) => {
+        const storedData = this.getStoredData();
+        
+        if (!storedData) {
+          return true; // No stored data, consider as changed
+        }
+        
+        // Compare file version
+        return storedData.fileVersion !== fileData.version;
+      }),
+      catchError(() => {
+        console.error('Failed to sync file changes');
+        return [false];
+      })
+    );
+  }
+
+  /**
+   * Get complete enhanced analysis with all new features
+   */
+  getEnhancedAnalysis(credentials: FigmaCredentials): Observable<{
+    pages: FigmaPage[];
+    designTokens: DesignToken[];
+    localStyles: LocalStyle[];
+    components: FigmaComponent[];
+    artboards: ProcessedArtboard[];
+    fileInfo: { name: string; lastModified: string; version: string };
+  }> {
+    return forkJoin({
+      pages: this.fetchPages(credentials),
+      localStyles: this.fetchLocalStyles(credentials),
+      components: this.fetchComponents(credentials),
+      artboards: this.getArtboardsWithImages(credentials),
+      fileData: this.getFileData(credentials)
+    }).pipe(
+      map(({ pages, localStyles, components, artboards, fileData }) => ({
+        pages,
+        localStyles,
+        components,
         artboards,
         designTokens: this.extractDesignTokensFromFileData(fileData),
         fileInfo: {

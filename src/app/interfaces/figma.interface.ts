@@ -35,6 +35,10 @@ export interface FigmaComponent {
   name: string;
   description: string;
   documentationLinks: FigmaDocumentationLink[];
+  id?: string;
+  thumbnail?: string;
+  variants?: ComponentVariant[];
+  properties?: ComponentProperty[];
 }
 
 export interface FigmaStyle {
@@ -134,4 +138,44 @@ export interface DesignToken {
 export interface FigmaApiError {
   message: string;
   status: number;
+}
+
+// Enhanced interfaces for the new features
+export interface FigmaFileData {
+  pages: FigmaPage[];
+  designTokens: DesignToken[];
+  localStyles: LocalStyle[];
+  components: FigmaComponent[];
+  variants: ComponentVariant[];
+  lastSynced: string;
+  fileVersion: string;
+}
+
+export interface FigmaPage {
+  id: string;
+  name: string;
+  thumbnail: string;
+  children?: FigmaNode[];
+}
+
+export interface LocalStyle {
+  id: string;
+  name: string;
+  type: 'FILL' | 'TEXT' | 'EFFECT';
+  description: string;
+  styleType: string;
+}
+
+export interface ComponentVariant {
+  id: string;
+  name: string;
+  description?: string;
+  properties: ComponentProperty[];
+}
+
+export interface ComponentProperty {
+  name: string;
+  type: 'VARIANT' | 'TEXT' | 'BOOLEAN' | 'INSTANCE_SWAP';
+  defaultValue?: string;
+  variantOptions?: string[];
 }

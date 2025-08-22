@@ -23,12 +23,12 @@
   <div class="results-tabs">
     <button 
       class="tab-button"
-      [class.active]="selectedTab === 'artboards'"
-      (click)="selectTab('artboards')"
+      [class.active]="selectedTab === 'pages'"
+      (click)="selectTab('pages')"
     >
-      <i class="ri-artboard-2-line"></i>
-      Artboards
-      <span class="tab-count">{{ artboards.length }}</span>
+      <i class="ri-file-copy-2-line"></i>
+      Pages
+      <span class="tab-count">{{ pages.length }}</span>
     </button>
     <button 
       class="tab-button"
@@ -36,50 +36,64 @@
       (click)="selectTab('tokens')"
     >
       <i class="ri-palette-line"></i>
-      Design Tokens
-      <span class="tab-count">{{ designTokens.length }}</span>
+      Design Tokens & Styles
+      <span class="tab-count">{{ designTokens.length + localStyles.length }}</span>
+    </button>
+    <button 
+      class="tab-button"
+      [class.active]="selectedTab === 'components'"
+      (click)="selectTab('components')"
+    >
+      <i class="ri-shapes-line"></i>
+      Components & Variants
+      <span class="tab-count">{{ components.length }}</span>
+    </button>
+    <button 
+      class="tab-button"
+      [class.active]="selectedTab === 'sync'"
+      (click)="selectTab('sync')"
+    >
+      <i class="ri-refresh-line"></i>
+      Live Sync
+      <span class="tab-count" *ngIf="syncStatus.isAutoSync">ON</span>
+      <span class="tab-count" *ngIf="!syncStatus.isAutoSync">OFF</span>
     </button>
   </div>
 
-  <!-- Artboards Tab -->
-  <div class="tab-content" *ngIf="selectedTab === 'artboards'">
-    <div class="artboards-grid" *ngIf="artboards.length > 0; else noArtboards">
-      <div class="artboard-card" *ngFor="let artboard of artboards">
-        <div class="artboard-image">
+  <!-- Pages Tab -->
+  <div class="tab-content" *ngIf="selectedTab === 'pages'">
+    <div class="pages-grid" *ngIf="pages.length > 0; else noPages">
+      <div class="page-card" *ngFor="let page of pages">
+        <div class="page-image">
           <img 
-            [src]="artboard.imageUrl" 
-            [alt]="artboard.name"
+            [src]="page.thumbnail" 
+            [alt]="page.name"
             (error)="$event.target.style.display='none'"
             loading="lazy"
           />
-          <div class="artboard-overlay">
-            <div class="artboard-dimensions">
-              {{ artboard.width }}×{{ artboard.height }}
+          <div class="page-overlay">
+            <div class="page-children-count">
+              {{ page.children?.length || 0 }} frames
             </div>
           </div>
         </div>
-        <div class="artboard-info">
-          <h3 class="artboard-name">{{ artboard.name }}</h3>
-          <div class="artboard-details">
-            <span class="detail-item">
-              <i class="ri-ruler-2-line"></i>
-              {{ artboard.width }}×{{ artboard.height }}px
-            </span>
-            <span class="detail-item" *ngIf="artboard.backgroundColor">
-              <i class="ri-palette-fill"></i>
-              <span class="color-preview" [style.background-color]="artboard.backgroundColor"></span>
-              {{ artboard.backgroundColor }}
-            </span>
+        <div class="page-info">
+          <h3 class="page-name">{{ page.name }}</h3>
+          <div class="page-details">
+            <div class="detail-item">
+              <i class="ri-layout-grid-line"></i>
+              {{ page.children?.length || 0 }} frames
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <ng-template #noArtboards>
+    <ng-template #noPages>
       <div class="empty-state">
-        <i class="ri-artboard-2-line"></i>
-        <h3>No Artboards Found</h3>
-        <p>No artboards were found in this Figma file. Make sure your file contains frames or components.</p>
+        <i class="ri-file-copy-2-line"></i>
+        <h3>No Pages Found</h3>
+        <p>This Figma file doesn't contain any pages or they couldn't be loaded.</p>
       </div>
     </ng-template>
   </div>
@@ -129,6 +143,122 @@
         <p>No design tokens were extracted from this Figma file. Try a file with defined styles and components.</p>
       </div>
     </ng-template>
+  </div>
+
+  <!-- Components & Variants Tab -->
+  <div class="tab-content" *ngIf="selectedTab === 'components'">
+    <div class="components-header" *ngIf="components.length > 0">
+      <div class="filter-buttons">
+        <button class="filter-button active">All Components</button>
+        <button class="filter-button">With Variants</button>
+        <button class="filter-button">Recently Used</button>
+      </div>
+    </div>
+
+    <div class="components-content" *ngIf="components.length > 0; else noComponents">
+      <div class="components-grid">
+        <div class="component-card" *ngFor="let component of components">
+          <div class="component-image">
+            <img 
+              [src]="component.thumbnail || 'assets/component-placeholder.png'" 
+              [alt]="component.name"
+              (error)="$event.target.style.display='none'"
+              loading="lazy"
+            />
+            <div class="component-overlay" *ngIf="component.variants && component.variants.length">
+              <div class="variant-count">
+                {{ component.variants.length }} variants
+              </div>
+            </div>
+          </div>
+          <div class="component-info">
+            <h3 class="component-name">{{ component.name }}</h3>
+            <p class="component-description" *ngIf="component.description">
+              {{ component.description }}
+            </p>
+            <div class="component-details">
+              <div class="detail-item" *ngIf="component.variants && component.variants.length">
+                <i class="ri-git-branch-line"></i>
+                {{ component.variants.length }} variants
+              </div>
+              <div class="detail-item" *ngIf="component.properties && component.properties.length">
+                <i class="ri-settings-3-line"></i>
+                {{ component.properties.length }} properties
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <ng-template #noComponents>
+      <div class="empty-state">
+        <i class="ri-shapes-line"></i>
+        <h3>No Components Found</h3>
+        <p>This Figma file doesn't contain any main components or they couldn't be loaded.</p>
+      </div>
+    </ng-template>
+  </div>
+
+  <!-- Live Sync Dashboard Tab -->
+  <div class="tab-content" *ngIf="selectedTab === 'sync'">
+    <div class="sync-dashboard">
+      <div class="sync-status">
+        <div class="status-header">
+          <h3>Sync Status</h3>
+          <div class="sync-toggle">
+            <label class="toggle-switch">
+              <input type="checkbox" [checked]="syncStatus.isAutoSync">
+              <span class="toggle-slider"></span>
+            </label>
+            <span class="toggle-label">Auto Sync</span>
+          </div>
+        </div>
+        
+        <div class="status-info">
+          <div class="status-item">
+            <i class="ri-time-line"></i>
+            <span>Last synced: {{ syncStatus.lastSynced || 'Never' }}</span>
+          </div>
+          <div class="status-item">
+            <i class="ri-check-line" *ngIf="syncStatus.isAutoSync"></i>
+            <i class="ri-pause-line" *ngIf="!syncStatus.isAutoSync"></i>
+            <span>{{ syncStatus.isAutoSync ? 'Auto sync enabled' : 'Auto sync disabled' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sync-actions">
+        <button class="sync-button primary">
+          <i class="ri-refresh-line"></i>
+          Sync Now
+        </button>
+        <button class="sync-button secondary">
+          <i class="ri-history-line"></i>
+          View History
+        </button>
+        <button class="sync-button secondary">
+          <i class="ri-settings-3-line"></i>
+          Sync Settings
+        </button>
+      </div>
+
+      <div class="sync-changes" *ngIf="false">
+        <h4>Recent Changes</h4>
+        <div class="changes-list">
+          <div class="change-item">
+            <i class="ri-palette-line"></i>
+            <span>Color style "Primary Blue" updated</span>
+            <span class="change-time">2 minutes ago</span>
+          </div>
+          <div class="change-item">
+            <i class="ri-text"></i>
+            <span>Text style "Heading Large" modified</span>
+            <span class="change-time">5 minutes ago</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 

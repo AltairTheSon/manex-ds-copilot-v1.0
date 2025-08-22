@@ -8,14 +8,14 @@
   --color-text-primary: #ffffff;
   --color-text-secondary: #a3a3a3;
   --color-text-muted: #737373;
-  --color-accent: #6366f1;
-  --color-accent-hover: #5b5fd8;
+  --color-accent: #0045AD;
+  --color-accent-hover: #003a92;
   --color-success: #10b981;
   --color-error: #ef4444;
   --color-warning: #f59e0b;
   
   /* Gradients */
-  --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --gradient-primary: linear-gradient(135deg, #004FC5 0%, #BFD8FC 100%);
   --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
   --gradient-accent: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
   
@@ -32,6 +32,7 @@
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
+  --button-radius: 50px;
   
   /* Shadows */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
