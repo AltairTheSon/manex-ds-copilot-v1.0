@@ -1,15 +1,40 @@
-# Dependencies
-node_modules/
-npm-debug.log*
-yarn-error.log
+# Source files
+src/
+*.ts
+*.scss
+*.spec.ts
 
-# Build artifacts
-*.tgz
-*.tar.gz
+# Development dependencies
+node_modules/
+.angular/
+.nyc_output/
+coverage/
+
+# Configuration files
+tsconfig*.json
+angular.json
+karma.conf.js
+.gitignore
+README.md
+
+# Build artifacts (keep only final build)
+dist/figma-ds-copilot/3rdpartylicenses.txt
+dist/figma-ds-copilot/*.map
+
+# Testing
+*.spec.ts
+*.e2e-spec.ts
+protractor.conf.js
+
+# Environment files
+.env*
 
 # IDE files
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 
 # OS files
 .DS_Store
@@ -17,21 +42,14 @@ Thumbs.db
 
 # Git
 .git/
-.gitignore
 
 # Documentation
-README.md
 docs/
 
-# Source files (only built files needed)
-src/
-*.ts
-*.scss
+# Build artifacts
+*.tgz
+*.tar.gz
 
-# Test files
-*.spec.ts
-karma.conf.js
-tsconfig.spec.json
-
-# Angular cache
-.angular/
+# Logs
+npm-debug.log*
+yarn-error.log
