@@ -42,6 +42,23 @@ export class FigmaService {
   }
 
   /**
+   * Get detailed styles data from Figma API with actual values
+   */
+  getStylesData(credentials: FigmaCredentials): Observable<any> {
+    const headers = this.getHeaders(credentials.accessToken);
+    
+    return this.http.get<any>(
+      `${this.FIGMA_API_BASE}/files/${credentials.fileId}/styles`,
+      { headers }
+    ).pipe(
+      catchError((error) => {
+        console.warn('Styles API endpoint failed, falling back to file parsing:', error);
+        return [];
+      })
+    );
+  }
+
+  /**
    * Get image URLs for specific node IDs
    */
   getImages(credentials: FigmaCredentials, nodeIds: string[]): Observable<FigmaImageResponse> {
@@ -301,7 +318,10 @@ export class FigmaService {
         
         return components;
       }),
-      catchError(this.handleError)
+      catchError((error) => {
+        console.error('Error fetching components:', error);
+        return this.handleError(error);
+      })
     );
   }
 
@@ -335,7 +355,8 @@ export class FigmaService {
         
         return components;
       }),
-      catchError(() => {
+      catchError((error) => {
+        console.error('Components API endpoint failed:', error);
         // If the components API fails, return empty array
         // We'll still get components from file parsing
         return [];
@@ -365,7 +386,7 @@ export class FigmaService {
       }
 
       // Traverse children
-      if (currentNode.children) {
+      if (currentNode.children && currentNode.children.length > 0) {
         currentNode.children.forEach(child => traverse(child));
       }
     };
@@ -436,20 +457,23 @@ export class FigmaService {
       localStyles: this.fetchLocalStyles(credentials),
       components: this.fetchComponents(credentials),
       artboards: this.getArtboardsWithImages(credentials),
-      fileData: this.getFileData(credentials)
+      fileData: this.getFileData(credentials),
+      stylesData: this.getStylesData(credentials)
     }).pipe(
-      map(({ pages, localStyles, components, artboards, fileData }) => ({
-        pages,
-        localStyles,
-        components,
-        artboards,
-        designTokens: this.extractDesignTokensFromFileData(fileData),
-        fileInfo: {
-          name: fileData.name,
-          lastModified: fileData.lastModified,
-          version: fileData.version
-        }
-      }))
+      map(({ pages, localStyles, components, artboards, fileData, stylesData }) => {
+        return {
+          pages,
+          localStyles,
+          components,
+          artboards,
+          designTokens: this.extractDesignTokensFromFileData(fileData, stylesData),
+          fileInfo: {
+            name: fileData.name,
+            lastModified: fileData.lastModified,
+            version: fileData.version
+          }
+        };
+      })
     );
   }
 
@@ -483,32 +507,39 @@ export class FigmaService {
   /**
    * Extract design tokens from file data
    */
-  private extractDesignTokensFromFileData(fileData: FigmaFileResponse): DesignToken[] {
+  private extractDesignTokensFromFileData(fileData: FigmaFileResponse, stylesData?: any[]): DesignToken[] {
     const tokens: DesignToken[] = [];
     
     // Process styles with proper value extraction
     Object.values(fileData.styles).forEach(style => {
+      // Try to find corresponding detailed style data
+      const detailedStyle = stylesData?.find(s => s.key === style.key);
+      const styleToProcess = detailedStyle || style;
+      
       if (style.styleType === 'FILL') {
+        const colorValue = this.extractColorValue(styleToProcess);
         tokens.push({
           type: 'color',
           name: style.name,
-          value: this.extractColorValue(style),
+          value: colorValue,
           description: style.description,
           category: 'colors'
         });
       } else if (style.styleType === 'TEXT') {
+        const textValue = this.extractTextValue(styleToProcess);
         tokens.push({
           type: 'typography',
           name: style.name,
-          value: this.extractTextValue(style),
+          value: textValue,
           description: style.description,
           category: 'typography'
         });
       } else if (style.styleType === 'EFFECT') {
+        const effectValue = this.extractEffectValue(styleToProcess);
         tokens.push({
           type: 'shadow',
           name: style.name,
-          value: this.extractEffectValue(style),
+          value: effectValue,
           description: style.description,
           category: 'effects'
         });
@@ -583,17 +614,35 @@ export class FigmaService {
    * Extract color value from style
    */
   private extractColorValue(style: any): string {
-    // For FILL styles, the fill data is in the style object
-    if (style.fills && style.fills.length > 0) {
+    // Strategy 1: Check for fills array (most common for FILL styles)
+    if (style.fills && Array.isArray(style.fills) && style.fills.length > 0) {
       const fill = style.fills[0];
       if (fill.type === 'SOLID' && fill.color) {
         return this.rgbaToHex(fill.color);
       }
     }
-    // Sometimes the color might be directly on the style
+    
+    // Strategy 2: Check for color property directly
     if (style.color) {
       return this.rgbaToHex(style.color);
     }
+    
+    // Strategy 3: Check for style nested property (Figma styles API format)
+    if (style.style && style.style.fills && Array.isArray(style.style.fills) && style.style.fills.length > 0) {
+      const fill = style.style.fills[0];
+      if (fill.type === 'SOLID' && fill.color) {
+        return this.rgbaToHex(fill.color);
+      }
+    }
+    
+    // Strategy 4: Check for paints property (alternative Figma format)
+    if (style.paints && Array.isArray(style.paints) && style.paints.length > 0) {
+      const paint = style.paints[0];
+      if (paint.type === 'SOLID' && paint.color) {
+        return this.rgbaToHex(paint.color);
+      }
+    }
+    
     return '#000000'; // fallback
   }
 
@@ -601,7 +650,7 @@ export class FigmaService {
    * Extract text value from style
    */
   private extractTextValue(style: any): string {
-    // For TEXT styles, the typography data is directly in the style object
+    // Strategy 1: Direct properties on style object
     if (style.fontFamily || style.fontSize || style.fontWeight) {
       const fontFamily = style.fontFamily || 'Arial';
       const fontSize = style.fontSize || 16;
@@ -609,10 +658,30 @@ export class FigmaService {
       const lineHeight = style.lineHeightPx ? `${style.lineHeightPx}px` : 'normal';
       return `font-family: "${fontFamily}"; font-size: ${fontSize}px; font-weight: ${fontWeight}; line-height: ${lineHeight};`;
     }
-    // Sometimes text styles might be nested in a style property
+    
+    // Strategy 2: Nested in style property (Figma styles API format)
     if (style.style) {
-      return this.extractTextValue(style.style);
+      if (style.style.fontFamily || style.style.fontSize || style.style.fontWeight) {
+        const fontFamily = style.style.fontFamily || 'Arial';
+        const fontSize = style.style.fontSize || 16;
+        const fontWeight = style.style.fontWeight || 400;
+        const lineHeight = style.style.lineHeightPx ? `${style.style.lineHeightPx}px` : 'normal';
+        return `font-family: "${fontFamily}"; font-size: ${fontSize}px; font-weight: ${fontWeight}; line-height: ${lineHeight};`;
+      }
     }
+    
+    // Strategy 3: Check for typeStyle property (alternative Figma format)
+    if (style.typeStyle) {
+      const typeStyle = style.typeStyle;
+      if (typeStyle.fontFamily || typeStyle.fontSize || typeStyle.fontWeight) {
+        const fontFamily = typeStyle.fontFamily || 'Arial';
+        const fontSize = typeStyle.fontSize || 16;
+        const fontWeight = typeStyle.fontWeight || 400;
+        const lineHeight = typeStyle.lineHeightPx ? `${typeStyle.lineHeightPx}px` : 'normal';
+        return `font-family: "${fontFamily}"; font-size: ${fontSize}px; font-weight: ${fontWeight}; line-height: ${lineHeight};`;
+      }
+    }
+    
     return 'font-family: Arial; font-size: 16px;'; // fallback
   }
 
@@ -620,7 +689,8 @@ export class FigmaService {
    * Extract effect value from style
    */
   private extractEffectValue(style: any): string {
-    if (style.effects && style.effects.length > 0) {
+    // Strategy 1: Direct effects array
+    if (style.effects && Array.isArray(style.effects) && style.effects.length > 0) {
       const effect = style.effects[0];
       if (effect.type === 'DROP_SHADOW' && effect.offset && effect.color) {
         const x = effect.offset.x || 0;
@@ -630,6 +700,31 @@ export class FigmaService {
         return `box-shadow: ${x}px ${y}px ${blur}px ${color};`;
       }
     }
+    
+    // Strategy 2: Nested in style property
+    if (style.style && style.style.effects && Array.isArray(style.style.effects) && style.style.effects.length > 0) {
+      const effect = style.style.effects[0];
+      if (effect.type === 'DROP_SHADOW' && effect.offset && effect.color) {
+        const x = effect.offset.x || 0;
+        const y = effect.offset.y || 0;
+        const blur = effect.radius || 4;
+        const color = this.rgbaToHex(effect.color);
+        return `box-shadow: ${x}px ${y}px ${blur}px ${color};`;
+      }
+    }
+    
+    // Strategy 3: Alternative effects format
+    if (style.effectStyle && style.effectStyle.effects && Array.isArray(style.effectStyle.effects) && style.effectStyle.effects.length > 0) {
+      const effect = style.effectStyle.effects[0];
+      if (effect.type === 'DROP_SHADOW' && effect.offset && effect.color) {
+        const x = effect.offset.x || 0;
+        const y = effect.offset.y || 0;
+        const blur = effect.radius || 4;
+        const color = this.rgbaToHex(effect.color);
+        return `box-shadow: ${x}px ${y}px ${blur}px ${color};`;
+      }
+    }
+    
     return 'box-shadow: 0 2px 4px rgba(0,0,0,0.1);'; // fallback
   }
 
