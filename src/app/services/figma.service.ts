@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, throwError, forkJoin } from 'rxjs';
+import { Observable, throwError, forkJoin, of } from 'rxjs';
 import { map, catchError, switchMap } from 'rxjs/operators';
 import {
   FigmaCredentials,
@@ -31,12 +31,17 @@ export class FigmaService {
    * Get Figma file data including all frames and design information
    */
   getFileData(credentials: FigmaCredentials): Observable<FigmaFileResponse> {
+    console.log('FigmaService: Making API call to get file data for file:', credentials.fileId);
     const headers = this.getHeaders(credentials.accessToken);
     
     return this.http.get<FigmaFileResponse>(
       `${this.FIGMA_API_BASE}/files/${credentials.fileId}`,
       { headers }
     ).pipe(
+      map((response) => {
+        console.log('FigmaService: Successfully fetched file data from Figma API');
+        return response;
+      }),
       catchError(this.handleError)
     );
   }
@@ -62,6 +67,7 @@ export class FigmaService {
    * Get image URLs for specific node IDs
    */
   getImages(credentials: FigmaCredentials, nodeIds: string[]): Observable<FigmaImageResponse> {
+    console.log(`FigmaService: Making API call to get images for ${nodeIds.length} nodes`);
     const headers = this.getHeaders(credentials.accessToken);
     const ids = nodeIds.join(',');
     
@@ -69,6 +75,10 @@ export class FigmaService {
       `${this.FIGMA_API_BASE}/images/${credentials.fileId}?ids=${ids}&format=png&scale=2`,
       { headers }
     ).pipe(
+      map((response) => {
+        console.log('FigmaService: Successfully fetched images from Figma Images API');
+        return response;
+      }),
       catchError(this.handleError)
     );
   }
@@ -88,10 +98,16 @@ export class FigmaService {
 
         return this.getImages(credentials, nodeIds).pipe(
           map((imageResponse: FigmaImageResponse) => {
-            return artboards.map(artboard => ({
-              ...artboard,
-              imageUrl: imageResponse.images[artboard.id] || ''
-            }));
+            return artboards.map(artboard => {
+              const imageUrl = imageResponse.images[artboard.id];
+              if (!imageUrl) {
+                console.warn(`FigmaService: No image available for artboard "${artboard.name}" (${artboard.id})`);
+              }
+              return {
+                ...artboard,
+                imageUrl: imageUrl || ''
+              };
+            });
           })
         );
       })
@@ -171,6 +187,7 @@ export class FigmaService {
    * Fetch pages from Figma file
    */
   fetchPages(credentials: FigmaCredentials): Observable<FigmaPage[]> {
+    console.log('FigmaService: Making API call to fetch pages for file:', credentials.fileId);
     return this.getFileData(credentials).pipe(
       switchMap((fileData: FigmaFileResponse) => {
         const pages: FigmaPage[] = [];
@@ -181,26 +198,36 @@ export class FigmaService {
               pages.push({
                 id: page.id,
                 name: page.name,
-                thumbnail: '', // Will be populated with image API
+                thumbnail: '', // TEMPORARY - will be replaced with actual API call
                 children: page.children || []
               });
             }
           });
         }
         
-        // Get thumbnails for the pages
+        console.log(`FigmaService: Found ${pages.length} pages, fetching thumbnails via Images API`);
+        
+        // REAL API CALL for thumbnails
         if (pages.length > 0) {
           const pageIds = pages.map(page => page.id);
           return this.getImages(credentials, pageIds).pipe(
             map((imageResponse: FigmaImageResponse) => {
-              return pages.map(page => ({
-                ...page,
-                thumbnail: imageResponse.images[page.id] || ''
-              }));
+              console.log('FigmaService: Successfully fetched page thumbnails from Images API');
+              return pages.map(page => {
+                const thumbnail = imageResponse.images[page.id];
+                if (!thumbnail) {
+                  console.warn(`FigmaService: No thumbnail available for page "${page.name}" (${page.id})`);
+                }
+                return {
+                  ...page,
+                  thumbnail: thumbnail || ''
+                };
+              });
             })
           );
         } else {
-          return [pages];
+          console.log('FigmaService: No pages found, returning empty array');
+          return of(pages);
         }
       })
     );
@@ -243,14 +270,20 @@ export class FigmaService {
           const nodeIds = artboards.map(artboard => artboard.id);
           return this.getImages(credentials, nodeIds).pipe(
             map((imageResponse: FigmaImageResponse) => {
-              return artboards.map(artboard => ({
-                ...artboard,
-                thumbnail: imageResponse.images[artboard.id] || ''
-              }));
+              return artboards.map(artboard => {
+                const thumbnail = imageResponse.images[artboard.id];
+                if (!thumbnail) {
+                  console.warn(`FigmaService: No thumbnail available for artboard "${artboard.name}" (${artboard.id})`);
+                }
+                return {
+                  ...artboard,
+                  thumbnail: thumbnail || ''
+                };
+              });
             })
           );
         } else {
-          return [artboards];
+          return of(artboards);
         }
       })
     );
@@ -363,7 +396,7 @@ export class FigmaService {
               description: component.description || '',
               documentationLinks: component.documentation_links || [],
               id: component.key,
-              thumbnail: '', // Will be populated with image API
+              thumbnail: '', // Note: Component thumbnails would require additional Images API call
               variants: [],
               properties: []
             });
@@ -401,7 +434,7 @@ export class FigmaService {
           description: '', // Node description not typically available in file API
           documentationLinks: [],
           id: currentNode.id,
-          thumbnail: '', // Will be populated with image API
+          thumbnail: '', // Note: Component thumbnails would require additional Images API call
           variants: currentNode.type === 'COMPONENT_SET' ? [] : undefined,
           properties: []
         });
