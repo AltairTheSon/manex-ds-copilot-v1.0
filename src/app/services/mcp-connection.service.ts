@@ -33,13 +33,20 @@ export class MCPConnectionService {
    */
   validateConnection(credentials: MCPCredentials): Observable<boolean> {
     const headers = this.getHeaders(credentials);
+    const apiUrl = `${credentials.serverUrl}/health`;
     
-    return this.http.get(`${credentials.serverUrl}/health`, { headers }).pipe(
-      map(() => true),
+    console.log('🔄 MCPService: Attempting MCP connection validation (Note: MCP is not a real service)');
+    console.log(`📡 API URL: ${apiUrl}`);
+    
+    return this.http.get(apiUrl, { headers }).pipe(
+      map(() => {
+        console.log('✅ MCPService: MCP connection validated (Note: this is likely a mock server)');
+        return true;
+      }),
       catchError((error) => {
-        console.error('MCP connection validation failed:', error);
+        console.error('❌ MCPService: MCP connection validation failed:', error);
         return throwError(() => ({ 
-          message: 'Failed to connect to MCP server',
+          message: 'Failed to connect to MCP server. Note: MCP may not be a real service.',
           status: error.status || 0
         }));
       })
@@ -51,12 +58,20 @@ export class MCPConnectionService {
    */
   getFileData(credentials: MCPCredentials): Observable<MCPFileResponse> {
     const headers = this.getHeaders(credentials);
+    const apiUrl = `${credentials.serverUrl}/projects/${credentials.projectId}/file`;
     
-    return this.http.get<MCPFileResponse>(
-      `${credentials.serverUrl}/projects/${credentials.projectId}/file`, 
-      { headers }
-    ).pipe(
-      catchError(this.handleError)
+    console.log('🔄 MCPService: Attempting MCP file data retrieval (Note: MCP is not a real service)');
+    console.log(`📡 API URL: ${apiUrl}`);
+    
+    return this.http.get<MCPFileResponse>(apiUrl, { headers }).pipe(
+      map((response: MCPFileResponse) => {
+        console.log('✅ MCPService: MCP file data received (Note: this is likely mock data)', response);
+        return response;
+      }),
+      catchError((error) => {
+        console.error('❌ MCPService: MCP file data retrieval failed:', error);
+        return this.handleError(error);
+      })
     );
   }
 
@@ -71,10 +86,9 @@ export class MCPConnectionService {
     artboards: ProcessedArtboard[];
     fileInfo: { name: string; lastModified: string; version: string };
   }> {
-    return this.getFileData(credentials).pipe(
-      map((mcpData) => this.convertMCPToFigmaFormat(mcpData)),
-      catchError(this.handleError)
-    );
+    console.error('❌ MCPService: MCP enhanced analysis not implemented - this is a placeholder service');
+    // MCP (Model Context Protocol) is not a real design file service
+    return throwError(() => new Error('MCP enhanced analysis is not implemented. Please use Figma API instead.'));
   }
 
   /**
@@ -88,74 +102,60 @@ export class MCPConnectionService {
     artboards: ProcessedArtboard[];
     fileInfo: { name: string; lastModified: string; version: string };
   } {
-    // This is a placeholder implementation that would need to be customized
-    // based on the actual MCP server response format
-    return {
-      pages: this.extractPagesFromMCP(mcpData),
-      designTokens: this.extractDesignTokensFromMCP(mcpData),
-      localStyles: this.extractLocalStylesFromMCP(mcpData),
-      components: this.extractComponentsFromMCP(mcpData),
-      artboards: this.extractArtboardsFromMCP(mcpData),
-      fileInfo: {
-        name: mcpData.name,
-        lastModified: mcpData.lastModified,
-        version: mcpData.version
-      }
-    };
+    console.error('❌ MCPService: MCP format conversion not implemented - this is a placeholder service');
+    // MCP (Model Context Protocol) is not a real design file service
+    // This method should not return placeholder data
+    throw new Error('MCP format conversion is not implemented. Please use Figma API instead.');
   }
 
   /**
    * Extract pages from MCP data
    */
   private extractPagesFromMCP(mcpData: MCPFileResponse): FigmaPage[] {
-    // Placeholder implementation - would need actual MCP format
-    return [
-      {
-        id: 'mcp-page-1',
-        name: 'MCP Page',
-        thumbnail: '',
-        children: []
-      }
-    ];
+    console.error('❌ MCPService: MCP pages extraction not implemented - this is a placeholder service');
+    // MCP (Model Context Protocol) is not a real design file service
+    // This service should not return placeholder data
+    throw new Error('MCP pages extraction is not implemented. Please use Figma API instead.');
   }
 
   /**
    * Extract design tokens from MCP data
    */
   private extractDesignTokensFromMCP(mcpData: MCPFileResponse): DesignToken[] {
-    // Placeholder implementation - would need actual MCP format
-    return [
-      {
-        name: 'MCP Token',
-        value: '#007AFF',
-        type: 'color',
-        category: 'primary'
-      }
-    ];
+    console.error('❌ MCPService: MCP design tokens extraction not implemented - this is a placeholder service');
+    // MCP (Model Context Protocol) is not a real design file service
+    // This service should not return placeholder data
+    throw new Error('MCP design tokens extraction is not implemented. Please use Figma API instead.');
   }
 
   /**
    * Extract local styles from MCP data
    */
   private extractLocalStylesFromMCP(mcpData: MCPFileResponse): LocalStyle[] {
-    // Placeholder implementation
-    return [];
+    console.error('❌ MCPService: MCP local styles extraction not implemented - this is a placeholder service');
+    // MCP (Model Context Protocol) is not a real design file service
+    // This service should not return placeholder data
+    throw new Error('MCP local styles extraction is not implemented. Please use Figma API instead.');
   }
 
   /**
    * Extract components from MCP data
    */
   private extractComponentsFromMCP(mcpData: MCPFileResponse): FigmaComponent[] {
-    // Placeholder implementation
-    return [];
+    console.error('❌ MCPService: MCP components extraction not implemented - this is a placeholder service');
+    // MCP (Model Context Protocol) is not a real design file service
+    // This service should not return placeholder data
+    throw new Error('MCP components extraction is not implemented. Please use Figma API instead.');
   }
 
   /**
    * Extract artboards from MCP data
    */
   private extractArtboardsFromMCP(mcpData: MCPFileResponse): ProcessedArtboard[] {
-    // Placeholder implementation
-    return [];
+    console.error('❌ MCPService: MCP artboards extraction not implemented - this is a placeholder service');
+    // MCP (Model Context Protocol) is not a real design file service
+    // This service should not return placeholder data
+    throw new Error('MCP artboards extraction is not implemented. Please use Figma API instead.');
   }
 
   /**
