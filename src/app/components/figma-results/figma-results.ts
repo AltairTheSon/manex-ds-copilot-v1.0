@@ -76,8 +76,7 @@ export class FigmaResults {
 
   // Sync functionality methods
   syncNow(): void {
-    console.log('Sync now clicked');
-    // TODO: Implement actual sync logic
+    console.log('🔄 Sync now clicked - sync functionality not yet implemented');
     this.syncStatus.lastSynced = new Date().toISOString();
   }
 
@@ -102,8 +101,7 @@ export class FigmaResults {
   toggleAutoSync(event: Event): void {
     const target = event.target as HTMLInputElement;
     this.syncStatus.isAutoSync = target.checked;
-    console.log('Auto sync toggled:', this.syncStatus.isAutoSync);
-    // TODO: Implement auto sync logic
+    console.log('🔄 Auto sync toggled - auto sync functionality not yet implemented:', this.syncStatus.isAutoSync);
   }
 
   getTokensByCategory(category: string): DesignToken[] {
