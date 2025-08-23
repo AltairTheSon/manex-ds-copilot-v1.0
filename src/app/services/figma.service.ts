@@ -172,7 +172,7 @@ export class FigmaService {
    */
   fetchPages(credentials: FigmaCredentials): Observable<FigmaPage[]> {
     return this.getFileData(credentials).pipe(
-      map((fileData: FigmaFileResponse) => {
+      switchMap((fileData: FigmaFileResponse) => {
         const pages: FigmaPage[] = [];
         
         if (fileData.document.children) {
@@ -188,7 +188,20 @@ export class FigmaService {
           });
         }
         
-        return pages;
+        // Get thumbnails for the pages
+        if (pages.length > 0) {
+          const pageIds = pages.map(page => page.id);
+          return this.getImages(credentials, pageIds).pipe(
+            map((imageResponse: FigmaImageResponse) => {
+              return pages.map(page => ({
+                ...page,
+                thumbnail: imageResponse.images[page.id] || ''
+              }));
+            })
+          );
+        } else {
+          return [pages];
+        }
       })
     );
   }
