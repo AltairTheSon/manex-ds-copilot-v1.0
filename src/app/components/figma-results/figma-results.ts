@@ -77,8 +77,10 @@ export class FigmaResults {
   // Sync functionality methods
   syncNow(): void {
     console.log('Sync now clicked');
-    // TODO: Implement actual sync logic
+    console.error('Sync functionality is not yet implemented - this would require actual API integration');
+    // Update last synced time to show user feedback, but note that no real sync occurred
     this.syncStatus.lastSynced = new Date().toISOString();
+    throw new Error('Manual sync functionality is not yet implemented. This feature requires actual API integration with design system server.');
   }
 
   viewSyncHistory(): void {
@@ -103,7 +105,8 @@ export class FigmaResults {
     const target = event.target as HTMLInputElement;
     this.syncStatus.isAutoSync = target.checked;
     console.log('Auto sync toggled:', this.syncStatus.isAutoSync);
-    // TODO: Implement auto sync logic
+    console.error('Auto sync functionality is not yet implemented - this would require background API polling');
+    throw new Error('Auto sync functionality is not yet implemented. This feature requires background API polling and real-time change detection.');
   }
 
   getTokensByCategory(category: string): DesignToken[] {
