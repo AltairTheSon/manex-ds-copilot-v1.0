@@ -1,7 +1,6 @@
 import { Component, ViewChild, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { HttpClientModule } from '@angular/common/http';
 import { FigmaForm } from './components/figma-form/figma-form';
 import { FigmaResults } from './components/figma-results/figma-results';
 import { FigmaService } from './services/figma.service';
@@ -12,7 +11,7 @@ import { FigmaCredentials, MCPCredentials, ProcessedArtboard, DesignToken, Figma
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, RouterModule, HttpClientModule, FigmaForm, FigmaResults],
+  imports: [CommonModule, RouterModule, FigmaForm, FigmaResults],
   templateUrl: './app.html',
   styleUrl: './app.scss',
   providers: [FigmaService, MCPConnectionService, ConnectionPersistenceService]
