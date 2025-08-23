@@ -302,19 +302,23 @@ export class FigmaService {
       map(({ fileData, componentsApi }) => {
         const components: FigmaComponent[] = [];
         
-        // First, add components from the dedicated API endpoint
-        components.push(...componentsApi);
+        // First, add components from the dedicated API endpoint (with null check)
+        if (Array.isArray(componentsApi)) {
+          components.push(...componentsApi);
+        }
         
         // Then, parse the file structure to find additional components
         const nodeComponents = this.extractComponentsFromNodes(fileData.document);
         
-        // Merge components, avoiding duplicates
-        nodeComponents.forEach(nodeComponent => {
-          const existingComponent = components.find(c => c.key === nodeComponent.key);
-          if (!existingComponent) {
-            components.push(nodeComponent);
-          }
-        });
+        // Merge components, avoiding duplicates (with null check)
+        if (Array.isArray(nodeComponents)) {
+          nodeComponents.forEach(nodeComponent => {
+            const existingComponent = components.find(c => c.key === nodeComponent.key);
+            if (!existingComponent) {
+              components.push(nodeComponent);
+            }
+          });
+        }
         
         return components;
       }),
@@ -370,6 +374,11 @@ export class FigmaService {
   private extractComponentsFromNodes(node: FigmaNode): FigmaComponent[] {
     const components: FigmaComponent[] = [];
 
+    // Add null check for the node parameter
+    if (!node) {
+      return components;
+    }
+
     const traverse = (currentNode: FigmaNode) => {
       // Check if node is a component or component set
       if (currentNode.type === 'COMPONENT' || currentNode.type === 'COMPONENT_SET') {
@@ -385,8 +394,8 @@ export class FigmaService {
         });
       }
 
-      // Traverse children
-      if (currentNode.children && currentNode.children.length > 0) {
+      // Traverse children with additional safety checks
+      if (currentNode.children && Array.isArray(currentNode.children) && currentNode.children.length > 0) {
         currentNode.children.forEach(child => traverse(child));
       }
     };
@@ -512,8 +521,8 @@ export class FigmaService {
     
     // Process styles with proper value extraction
     Object.values(fileData.styles).forEach(style => {
-      // Try to find corresponding detailed style data
-      const detailedStyle = stylesData?.find(s => s.key === style.key);
+      // Try to find corresponding detailed style data (with safe array check)
+      const detailedStyle = (Array.isArray(stylesData)) ? stylesData.find(s => s.key === style.key) : null;
       const styleToProcess = detailedStyle || style;
       
       if (style.styleType === 'FILL') {
