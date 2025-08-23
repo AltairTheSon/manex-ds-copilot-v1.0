@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, throwError, forkJoin } from 'rxjs';
+import { Observable, throwError, forkJoin, of } from 'rxjs';
 import { map, catchError, switchMap } from 'rxjs/operators';
 import {
   FigmaCredentials,
@@ -32,12 +32,18 @@ export class FigmaService {
    */
   getFileData(credentials: FigmaCredentials): Observable<FigmaFileResponse> {
     const headers = this.getHeaders(credentials.accessToken);
+    const url = `${this.FIGMA_API_BASE}/files/${credentials.fileId}`;
     
-    return this.http.get<FigmaFileResponse>(
-      `${this.FIGMA_API_BASE}/files/${credentials.fileId}`,
-      { headers }
-    ).pipe(
-      catchError(this.handleError)
+    console.log(`📡 Making API call to: ${url}`);
+    return this.http.get<FigmaFileResponse>(url, { headers }).pipe(
+      map((response) => {
+        console.log(`✅ File data API call successful for file: ${response.name}`);
+        return response;
+      }),
+      catchError((error) => {
+        console.error(`❌ File data API call failed:`, error);
+        return this.handleError(error);
+      })
     );
   }
 
@@ -64,12 +70,19 @@ export class FigmaService {
   getImages(credentials: FigmaCredentials, nodeIds: string[]): Observable<FigmaImageResponse> {
     const headers = this.getHeaders(credentials.accessToken);
     const ids = nodeIds.join(',');
+    const url = `${this.FIGMA_API_BASE}/images/${credentials.fileId}?ids=${ids}&format=png&scale=2`;
     
-    return this.http.get<FigmaImageResponse>(
-      `${this.FIGMA_API_BASE}/images/${credentials.fileId}?ids=${ids}&format=png&scale=2`,
-      { headers }
-    ).pipe(
-      catchError(this.handleError)
+    console.log(`📡 Making images API call for ${nodeIds.length} nodes: ${url}`);
+    return this.http.get<FigmaImageResponse>(url, { headers }).pipe(
+      map((response) => {
+        const imageCount = Object.keys(response.images || {}).length;
+        console.log(`✅ Images API call successful - received ${imageCount} image URLs`);
+        return response;
+      }),
+      catchError((error) => {
+        console.error(`❌ Images API call failed:`, error);
+        return this.handleError(error);
+      })
     );
   }
 
@@ -171,37 +184,53 @@ export class FigmaService {
    * Fetch pages from Figma file
    */
   fetchPages(credentials: FigmaCredentials): Observable<FigmaPage[]> {
+    console.log('🔄 Fetching Figma file data for pages...');
     return this.getFileData(credentials).pipe(
       switchMap((fileData: FigmaFileResponse) => {
-        const pages: FigmaPage[] = [];
+        const pageIds: string[] = [];
         
         if (fileData.document.children) {
           fileData.document.children.forEach(page => {
             if (page.type === 'CANVAS') {
-              pages.push({
-                id: page.id,
-                name: page.name,
-                thumbnail: '', // Will be populated with image API
-                children: page.children || []
-              });
+              pageIds.push(page.id);
             }
           });
         }
         
-        // Get thumbnails for the pages
-        if (pages.length > 0) {
-          const pageIds = pages.map(page => page.id);
-          return this.getImages(credentials, pageIds).pipe(
-            map((imageResponse: FigmaImageResponse) => {
-              return pages.map(page => ({
-                ...page,
-                thumbnail: imageResponse.images[page.id] || ''
-              }));
-            })
-          );
-        } else {
-          return [pages];
+        if (pageIds.length === 0) {
+          console.log('⚠️ No pages found in Figma file');
+          return of([]);
         }
+        
+        console.log(`🖼️ Fetching thumbnails for ${pageIds.length} pages...`);
+        return this.getImages(credentials, pageIds).pipe(
+          map((imageResponse: FigmaImageResponse) => {
+            const pages: FigmaPage[] = [];
+            
+            if (fileData.document.children) {
+              fileData.document.children.forEach(page => {
+                if (page.type === 'CANVAS') {
+                  const thumbnail = imageResponse.images[page.id];
+                  if (!thumbnail) {
+                    console.warn(`⚠️ No thumbnail received for page "${page.name}" (${page.id})`);
+                  } else {
+                    console.log(`✅ Thumbnail loaded for page "${page.name}"`);
+                  }
+                  
+                  pages.push({
+                    id: page.id,
+                    name: page.name,
+                    thumbnail: thumbnail || '',
+                    children: page.children || []
+                  });
+                }
+              });
+            }
+            
+            console.log(`✅ Successfully fetched ${pages.length} pages with API calls`);
+            return pages;
+          })
+        );
       })
     );
   }
@@ -210,48 +239,63 @@ export class FigmaService {
    * Fetch artboards for a specific page
    */
   fetchPageArtboards(pageId: string, credentials: FigmaCredentials): Observable<Artboard[]> {
+    console.log(`🔄 Fetching artboards for page: ${pageId}`);
     return this.getFileData(credentials).pipe(
       switchMap((fileData: FigmaFileResponse) => {
         const page = this.findPageById(fileData.document, pageId);
         
         if (!page || !page.children) {
+          console.warn(`⚠️ Page ${pageId} not found or has no children`);
           return throwError(() => new Error('Page not found or has no children'));
         }
 
-        const artboards: Artboard[] = [];
+        const artboardIds: string[] = [];
         
-        // Extract artboards (FRAME type nodes) from the page
+        // Extract artboard IDs (FRAME type nodes) from the page
         page.children.forEach(child => {
           if (child.type === 'FRAME' && child.absoluteBoundingBox) {
-            artboards.push({
-              id: child.id,
-              name: child.name,
-              type: 'FRAME',
-              thumbnail: '', // Will be populated with image API
-              absoluteBoundingBox: {
-                x: child.absoluteBoundingBox.x,
-                y: child.absoluteBoundingBox.y,
-                width: child.absoluteBoundingBox.width,
-                height: child.absoluteBoundingBox.height
-              }
-            });
+            artboardIds.push(child.id);
           }
         });
 
-        // Get thumbnails for the artboards
-        if (artboards.length > 0) {
-          const nodeIds = artboards.map(artboard => artboard.id);
-          return this.getImages(credentials, nodeIds).pipe(
-            map((imageResponse: FigmaImageResponse) => {
-              return artboards.map(artboard => ({
-                ...artboard,
-                thumbnail: imageResponse.images[artboard.id] || ''
-              }));
-            })
-          );
-        } else {
-          return [artboards];
+        if (artboardIds.length === 0) {
+          console.log('⚠️ No artboards found in page');
+          return of([]);
         }
+
+        console.log(`🖼️ Fetching thumbnails for ${artboardIds.length} artboards...`);
+        return this.getImages(credentials, artboardIds).pipe(
+          map((imageResponse: FigmaImageResponse) => {
+            const artboards: Artboard[] = [];
+            
+            page.children!.forEach(child => {
+              if (child.type === 'FRAME' && child.absoluteBoundingBox) {
+                const thumbnail = imageResponse.images[child.id];
+                if (!thumbnail) {
+                  console.warn(`⚠️ No thumbnail received for artboard "${child.name}" (${child.id})`);
+                } else {
+                  console.log(`✅ Thumbnail loaded for artboard "${child.name}"`);
+                }
+                
+                artboards.push({
+                  id: child.id,
+                  name: child.name,
+                  type: 'FRAME',
+                  thumbnail: thumbnail || '',
+                  absoluteBoundingBox: {
+                    x: child.absoluteBoundingBox.x,
+                    y: child.absoluteBoundingBox.y,
+                    width: child.absoluteBoundingBox.width,
+                    height: child.absoluteBoundingBox.height
+                  }
+                });
+              }
+            });
+            
+            console.log(`✅ Successfully fetched ${artboards.length} artboards with API calls`);
+            return artboards;
+          })
+        );
       })
     );
   }
@@ -312,7 +356,7 @@ export class FigmaService {
       fileData: this.getFileData(credentials),
       componentsApi: this.getComponentsFromAPI(credentials)
     }).pipe(
-      map(({ fileData, componentsApi }) => {
+      switchMap(({ fileData, componentsApi }) => {
         const components: FigmaComponent[] = [];
         
         // First, add components from the dedicated API endpoint (with null check)
@@ -333,10 +377,32 @@ export class FigmaService {
           });
         }
         
-        return components;
+        // Find components without thumbnails and load them
+        const componentsNeedingThumbnails = components.filter(c => !c.thumbnail && c.key);
+        
+        if (componentsNeedingThumbnails.length > 0) {
+          const nodeIds = componentsNeedingThumbnails.map(c => c.key);
+          console.log(`🖼️ Loading thumbnails for ${nodeIds.length} file-parsed components...`);
+          
+          return this.getImages(credentials, nodeIds).pipe(
+            map((imageResponse: FigmaImageResponse) => {
+              return components.map(component => ({
+                ...component,
+                thumbnail: component.thumbnail || imageResponse.images[component.key]
+              }));
+            }),
+            catchError((imageError) => {
+              console.warn('⚠️ Failed to load additional component thumbnails:', imageError);
+              // Return components without additional thumbnails rather than failing
+              return of(components);
+            })
+          );
+        } else {
+          return of(components);
+        }
       }),
       catchError((error) => {
-        console.error('Error fetching components:', error);
+        console.error('❌ Error fetching components:', error);
         return this.handleError(error);
       })
     );
@@ -347,13 +413,13 @@ export class FigmaService {
    */
   private getComponentsFromAPI(credentials: FigmaCredentials): Observable<FigmaComponent[]> {
     const headers = this.getHeaders(credentials.accessToken);
+    const url = `${this.FIGMA_API_BASE}/files/${credentials.fileId}/components`;
     
-    return this.http.get<any>(
-      `${this.FIGMA_API_BASE}/files/${credentials.fileId}/components`,
-      { headers }
-    ).pipe(
-      map((componentsResponse: any) => {
+    console.log(`📡 Making components API call to: ${url}`);
+    return this.http.get<any>(url, { headers }).pipe(
+      switchMap((componentsResponse: any) => {
         const components: FigmaComponent[] = [];
+        const componentIds: string[] = [];
         
         if (componentsResponse.meta && componentsResponse.meta.components) {
           Object.values(componentsResponse.meta.components).forEach((component: any) => {
@@ -363,20 +429,38 @@ export class FigmaService {
               description: component.description || '',
               documentationLinks: component.documentation_links || [],
               id: component.key,
-              thumbnail: '', // Will be populated with image API
               variants: [],
               properties: []
             });
+            componentIds.push(component.key);
           });
         }
         
-        return components;
+        if (componentIds.length === 0) {
+          console.log('⚠️ No components found in API response');
+          return of(components);
+        }
+        
+        console.log(`🖼️ Fetching thumbnails for ${componentIds.length} components...`);
+        return this.getImages(credentials, componentIds).pipe(
+          map((imageResponse: FigmaImageResponse) => {
+            return components.map(component => ({
+              ...component,
+              thumbnail: imageResponse.images[component.key]
+            }));
+          }),
+          catchError((imageError) => {
+            console.warn('⚠️ Failed to load component thumbnails:', imageError);
+            // Return components without thumbnails rather than failing completely
+            return of(components);
+          })
+        );
       }),
       catchError((error) => {
-        console.error('Components API endpoint failed:', error);
+        console.error('❌ Components API endpoint failed:', error);
         // If the components API fails, return empty array
         // We'll still get components from file parsing
-        return [];
+        return of([]);
       })
     );
   }
@@ -401,7 +485,6 @@ export class FigmaService {
           description: '', // Node description not typically available in file API
           documentationLinks: [],
           id: currentNode.id,
-          thumbnail: '', // Will be populated with image API
           variants: currentNode.type === 'COMPONENT_SET' ? [] : undefined,
           properties: []
         });

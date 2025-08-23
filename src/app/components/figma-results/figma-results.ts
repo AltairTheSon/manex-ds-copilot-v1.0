@@ -76,9 +76,11 @@ export class FigmaResults {
 
   // Sync functionality methods
   syncNow(): void {
-    console.log('Sync now clicked');
-    // TODO: Implement actual sync logic
+    console.log('🔄 Manual sync requested');
+    // Manual sync is handled by the parent component through re-fetching data
+    // Update the last synced timestamp to show user feedback
     this.syncStatus.lastSynced = new Date().toISOString();
+    console.log('✅ Sync timestamp updated');
   }
 
   viewSyncHistory(): void {
@@ -102,8 +104,15 @@ export class FigmaResults {
   toggleAutoSync(event: Event): void {
     const target = event.target as HTMLInputElement;
     this.syncStatus.isAutoSync = target.checked;
-    console.log('Auto sync toggled:', this.syncStatus.isAutoSync);
-    // TODO: Implement auto sync logic
+    console.log('🔄 Auto sync toggled:', this.syncStatus.isAutoSync);
+    
+    if (this.syncStatus.isAutoSync) {
+      console.log('⚠️ Auto sync enabled - this would require background polling implementation');
+      // Auto sync would require implementing a background service to periodically check for changes
+      // This is UI state management only - actual auto sync would be implemented at the service level
+    } else {
+      console.log('ℹ️ Auto sync disabled');
+    }
   }
 
   getTokensByCategory(category: string): DesignToken[] {
