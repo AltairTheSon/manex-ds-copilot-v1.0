@@ -42,6 +42,23 @@ export class FigmaService {
   }
 
   /**
+   * Get detailed styles data from Figma API with actual values
+   */
+  getStylesData(credentials: FigmaCredentials): Observable<any> {
+    const headers = this.getHeaders(credentials.accessToken);
+    
+    return this.http.get<any>(
+      `${this.FIGMA_API_BASE}/files/${credentials.fileId}/styles`,
+      { headers }
+    ).pipe(
+      catchError((error) => {
+        console.warn('Styles API endpoint failed, falling back to file parsing:', error);
+        return [];
+      })
+    );
+  }
+
+  /**
    * Get image URLs for specific node IDs
    */
   getImages(credentials: FigmaCredentials, nodeIds: string[]): Observable<FigmaImageResponse> {
@@ -278,11 +295,15 @@ export class FigmaService {
    * Fetch components from Figma file
    */
   fetchComponents(credentials: FigmaCredentials): Observable<FigmaComponent[]> {
+    console.log('=== FETCHING COMPONENTS ===');
+    
     return forkJoin({
       fileData: this.getFileData(credentials),
       componentsApi: this.getComponentsFromAPI(credentials)
     }).pipe(
       map(({ fileData, componentsApi }) => {
+        console.log('Components from API:', componentsApi.length);
+        
         const components: FigmaComponent[] = [];
         
         // First, add components from the dedicated API endpoint
@@ -290,18 +311,31 @@ export class FigmaService {
         
         // Then, parse the file structure to find additional components
         const nodeComponents = this.extractComponentsFromNodes(fileData.document);
+        console.log('Components from file nodes:', nodeComponents.length);
         
         // Merge components, avoiding duplicates
         nodeComponents.forEach(nodeComponent => {
           const existingComponent = components.find(c => c.key === nodeComponent.key);
           if (!existingComponent) {
+            console.log('Adding unique component from nodes:', nodeComponent.name);
             components.push(nodeComponent);
+          } else {
+            console.log('Duplicate component found, skipping:', nodeComponent.name);
           }
+        });
+        
+        console.log('=== FINAL COMPONENTS RESULT ===');
+        console.log('Total unique components:', components.length);
+        components.forEach(comp => {
+          console.log(`- ${comp.name} (key: ${comp.key})`);
         });
         
         return components;
       }),
-      catchError(this.handleError)
+      catchError((error) => {
+        console.error('Error fetching components:', error);
+        return this.handleError(error);
+      })
     );
   }
 
@@ -316,10 +350,15 @@ export class FigmaService {
       { headers }
     ).pipe(
       map((componentsResponse: any) => {
+        console.log('=== COMPONENTS API RESPONSE ===');
+        console.log('Components API Response:', componentsResponse);
+        
         const components: FigmaComponent[] = [];
         
         if (componentsResponse.meta && componentsResponse.meta.components) {
+          console.log('Found components in meta.components:', Object.keys(componentsResponse.meta.components).length);
           Object.values(componentsResponse.meta.components).forEach((component: any) => {
+            console.log('Processing component:', component);
             components.push({
               key: component.key,
               name: component.name,
@@ -331,11 +370,15 @@ export class FigmaService {
               properties: []
             });
           });
+        } else {
+          console.log('No components found in API response structure:', Object.keys(componentsResponse));
         }
         
+        console.log('Final components from API:', components.length);
         return components;
       }),
-      catchError(() => {
+      catchError((error) => {
+        console.error('Components API endpoint failed:', error);
         // If the components API fails, return empty array
         // We'll still get components from file parsing
         return [];
@@ -348,10 +391,16 @@ export class FigmaService {
    */
   private extractComponentsFromNodes(node: FigmaNode): FigmaComponent[] {
     const components: FigmaComponent[] = [];
+    console.log('=== EXTRACTING COMPONENTS FROM NODES ===');
+    console.log('Starting node traversal for components...');
 
-    const traverse = (currentNode: FigmaNode) => {
+    const traverse = (currentNode: FigmaNode, depth = 0) => {
+      const indent = '  '.repeat(depth);
+      console.log(`${indent}Checking node: ${currentNode.name} (${currentNode.type})`);
+      
       // Check if node is a component or component set
       if (currentNode.type === 'COMPONENT' || currentNode.type === 'COMPONENT_SET') {
+        console.log(`${indent}✓ Found component: ${currentNode.name} (${currentNode.type})`);
         components.push({
           key: currentNode.id,
           name: currentNode.name,
@@ -365,12 +414,14 @@ export class FigmaService {
       }
 
       // Traverse children
-      if (currentNode.children) {
-        currentNode.children.forEach(child => traverse(child));
+      if (currentNode.children && currentNode.children.length > 0) {
+        console.log(`${indent}Traversing ${currentNode.children.length} children...`);
+        currentNode.children.forEach(child => traverse(child, depth + 1));
       }
     };
 
     traverse(node);
+    console.log(`Total components found in nodes: ${components.length}`);
     return components;
   }
 
@@ -436,20 +487,29 @@ export class FigmaService {
       localStyles: this.fetchLocalStyles(credentials),
       components: this.fetchComponents(credentials),
       artboards: this.getArtboardsWithImages(credentials),
-      fileData: this.getFileData(credentials)
+      fileData: this.getFileData(credentials),
+      stylesData: this.getStylesData(credentials)
     }).pipe(
-      map(({ pages, localStyles, components, artboards, fileData }) => ({
-        pages,
-        localStyles,
-        components,
-        artboards,
-        designTokens: this.extractDesignTokensFromFileData(fileData),
-        fileInfo: {
-          name: fileData.name,
-          lastModified: fileData.lastModified,
-          version: fileData.version
-        }
-      }))
+      map(({ pages, localStyles, components, artboards, fileData, stylesData }) => {
+        console.log('=== FIGMA API DEBUG ===');
+        console.log('File data styles:', fileData.styles);
+        console.log('Styles API data:', stylesData);
+        console.log('Sample style from file:', Object.values(fileData.styles)[0]);
+        console.log('Sample style from styles API:', stylesData[0]);
+        
+        return {
+          pages,
+          localStyles,
+          components,
+          artboards,
+          designTokens: this.extractDesignTokensFromFileData(fileData, stylesData),
+          fileInfo: {
+            name: fileData.name,
+            lastModified: fileData.lastModified,
+            version: fileData.version
+          }
+        };
+      })
     );
   }
 
@@ -483,32 +543,50 @@ export class FigmaService {
   /**
    * Extract design tokens from file data
    */
-  private extractDesignTokensFromFileData(fileData: FigmaFileResponse): DesignToken[] {
+  private extractDesignTokensFromFileData(fileData: FigmaFileResponse, stylesData?: any[]): DesignToken[] {
     const tokens: DesignToken[] = [];
+    
+    console.log('=== EXTRACTING DESIGN TOKENS ===');
+    console.log('File styles count:', Object.keys(fileData.styles).length);
+    console.log('Styles API data count:', stylesData?.length || 0);
     
     // Process styles with proper value extraction
     Object.values(fileData.styles).forEach(style => {
+      console.log(`Processing style: ${style.name} (${style.styleType})`);
+      
+      // Try to find corresponding detailed style data
+      const detailedStyle = stylesData?.find(s => s.key === style.key);
+      const styleToProcess = detailedStyle || style;
+      
+      console.log('Style object:', styleToProcess);
+      
       if (style.styleType === 'FILL') {
+        const colorValue = this.extractColorValue(styleToProcess);
+        console.log(`Extracted color for ${style.name}:`, colorValue);
         tokens.push({
           type: 'color',
           name: style.name,
-          value: this.extractColorValue(style),
+          value: colorValue,
           description: style.description,
           category: 'colors'
         });
       } else if (style.styleType === 'TEXT') {
+        const textValue = this.extractTextValue(styleToProcess);
+        console.log(`Extracted typography for ${style.name}:`, textValue);
         tokens.push({
           type: 'typography',
           name: style.name,
-          value: this.extractTextValue(style),
+          value: textValue,
           description: style.description,
           category: 'typography'
         });
       } else if (style.styleType === 'EFFECT') {
+        const effectValue = this.extractEffectValue(styleToProcess);
+        console.log(`Extracted effect for ${style.name}:`, effectValue);
         tokens.push({
           type: 'shadow',
           name: style.name,
-          value: this.extractEffectValue(style),
+          value: effectValue,
           description: style.description,
           category: 'effects'
         });
@@ -517,6 +595,12 @@ export class FigmaService {
 
     // Extract tokens from document nodes
     this.extractTokensFromNodes(fileData.document, tokens);
+    
+    console.log('=== FINAL TOKENS ===');
+    console.log('Total tokens extracted:', tokens.length);
+    tokens.forEach(token => {
+      console.log(`${token.name} (${token.type}): ${token.value}`);
+    });
     
     return tokens;
   }
@@ -583,17 +667,50 @@ export class FigmaService {
    * Extract color value from style
    */
   private extractColorValue(style: any): string {
-    // For FILL styles, the fill data is in the style object
-    if (style.fills && style.fills.length > 0) {
+    console.log('Extracting color from style:', style);
+    
+    // Strategy 1: Check for fills array (most common for FILL styles)
+    if (style.fills && Array.isArray(style.fills) && style.fills.length > 0) {
       const fill = style.fills[0];
+      console.log('Found fills array, first fill:', fill);
       if (fill.type === 'SOLID' && fill.color) {
-        return this.rgbaToHex(fill.color);
+        const hex = this.rgbaToHex(fill.color);
+        console.log('Converted color to hex:', hex);
+        return hex;
       }
     }
-    // Sometimes the color might be directly on the style
+    
+    // Strategy 2: Check for color property directly
     if (style.color) {
-      return this.rgbaToHex(style.color);
+      console.log('Found direct color property:', style.color);
+      const hex = this.rgbaToHex(style.color);
+      console.log('Converted direct color to hex:', hex);
+      return hex;
     }
+    
+    // Strategy 3: Check for style nested property (Figma styles API format)
+    if (style.style && style.style.fills && Array.isArray(style.style.fills) && style.style.fills.length > 0) {
+      const fill = style.style.fills[0];
+      console.log('Found nested style.fills, first fill:', fill);
+      if (fill.type === 'SOLID' && fill.color) {
+        const hex = this.rgbaToHex(fill.color);
+        console.log('Converted nested color to hex:', hex);
+        return hex;
+      }
+    }
+    
+    // Strategy 4: Check for paints property (alternative Figma format)
+    if (style.paints && Array.isArray(style.paints) && style.paints.length > 0) {
+      const paint = style.paints[0];
+      console.log('Found paints array, first paint:', paint);
+      if (paint.type === 'SOLID' && paint.color) {
+        const hex = this.rgbaToHex(paint.color);
+        console.log('Converted paint color to hex:', hex);
+        return hex;
+      }
+    }
+    
+    console.warn('Could not extract color from style, using fallback:', style);
     return '#000000'; // fallback
   }
 
@@ -601,18 +718,49 @@ export class FigmaService {
    * Extract text value from style
    */
   private extractTextValue(style: any): string {
-    // For TEXT styles, the typography data is directly in the style object
+    console.log('Extracting typography from style:', style);
+    
+    // Strategy 1: Direct properties on style object
     if (style.fontFamily || style.fontSize || style.fontWeight) {
       const fontFamily = style.fontFamily || 'Arial';
       const fontSize = style.fontSize || 16;
       const fontWeight = style.fontWeight || 400;
       const lineHeight = style.lineHeightPx ? `${style.lineHeightPx}px` : 'normal';
-      return `font-family: "${fontFamily}"; font-size: ${fontSize}px; font-weight: ${fontWeight}; line-height: ${lineHeight};`;
+      const result = `font-family: "${fontFamily}"; font-size: ${fontSize}px; font-weight: ${fontWeight}; line-height: ${lineHeight};`;
+      console.log('Extracted typography (direct):', result);
+      return result;
     }
-    // Sometimes text styles might be nested in a style property
+    
+    // Strategy 2: Nested in style property (Figma styles API format)
     if (style.style) {
-      return this.extractTextValue(style.style);
+      console.log('Found nested style property:', style.style);
+      if (style.style.fontFamily || style.style.fontSize || style.style.fontWeight) {
+        const fontFamily = style.style.fontFamily || 'Arial';
+        const fontSize = style.style.fontSize || 16;
+        const fontWeight = style.style.fontWeight || 400;
+        const lineHeight = style.style.lineHeightPx ? `${style.style.lineHeightPx}px` : 'normal';
+        const result = `font-family: "${fontFamily}"; font-size: ${fontSize}px; font-weight: ${fontWeight}; line-height: ${lineHeight};`;
+        console.log('Extracted typography (nested):', result);
+        return result;
+      }
     }
+    
+    // Strategy 3: Check for typeStyle property (alternative Figma format)
+    if (style.typeStyle) {
+      console.log('Found typeStyle property:', style.typeStyle);
+      const typeStyle = style.typeStyle;
+      if (typeStyle.fontFamily || typeStyle.fontSize || typeStyle.fontWeight) {
+        const fontFamily = typeStyle.fontFamily || 'Arial';
+        const fontSize = typeStyle.fontSize || 16;
+        const fontWeight = typeStyle.fontWeight || 400;
+        const lineHeight = typeStyle.lineHeightPx ? `${typeStyle.lineHeightPx}px` : 'normal';
+        const result = `font-family: "${fontFamily}"; font-size: ${fontSize}px; font-weight: ${fontWeight}; line-height: ${lineHeight};`;
+        console.log('Extracted typography (typeStyle):', result);
+        return result;
+      }
+    }
+    
+    console.warn('Could not extract typography from style, using fallback:', style);
     return 'font-family: Arial; font-size: 16px;'; // fallback
   }
 
@@ -620,16 +768,54 @@ export class FigmaService {
    * Extract effect value from style
    */
   private extractEffectValue(style: any): string {
-    if (style.effects && style.effects.length > 0) {
+    console.log('Extracting effects from style:', style);
+    
+    // Strategy 1: Direct effects array
+    if (style.effects && Array.isArray(style.effects) && style.effects.length > 0) {
       const effect = style.effects[0];
+      console.log('Found effects array, first effect:', effect);
       if (effect.type === 'DROP_SHADOW' && effect.offset && effect.color) {
         const x = effect.offset.x || 0;
         const y = effect.offset.y || 0;
         const blur = effect.radius || 4;
         const color = this.rgbaToHex(effect.color);
-        return `box-shadow: ${x}px ${y}px ${blur}px ${color};`;
+        const result = `box-shadow: ${x}px ${y}px ${blur}px ${color};`;
+        console.log('Extracted effect (direct):', result);
+        return result;
       }
     }
+    
+    // Strategy 2: Nested in style property
+    if (style.style && style.style.effects && Array.isArray(style.style.effects) && style.style.effects.length > 0) {
+      const effect = style.style.effects[0];
+      console.log('Found nested style.effects, first effect:', effect);
+      if (effect.type === 'DROP_SHADOW' && effect.offset && effect.color) {
+        const x = effect.offset.x || 0;
+        const y = effect.offset.y || 0;
+        const blur = effect.radius || 4;
+        const color = this.rgbaToHex(effect.color);
+        const result = `box-shadow: ${x}px ${y}px ${blur}px ${color};`;
+        console.log('Extracted effect (nested):', result);
+        return result;
+      }
+    }
+    
+    // Strategy 3: Alternative effects format
+    if (style.effectStyle && style.effectStyle.effects && Array.isArray(style.effectStyle.effects) && style.effectStyle.effects.length > 0) {
+      const effect = style.effectStyle.effects[0];
+      console.log('Found effectStyle.effects, first effect:', effect);
+      if (effect.type === 'DROP_SHADOW' && effect.offset && effect.color) {
+        const x = effect.offset.x || 0;
+        const y = effect.offset.y || 0;
+        const blur = effect.radius || 4;
+        const color = this.rgbaToHex(effect.color);
+        const result = `box-shadow: ${x}px ${y}px ${blur}px ${color};`;
+        console.log('Extracted effect (effectStyle):', result);
+        return result;
+      }
+    }
+    
+    console.warn('Could not extract effects from style, using fallback:', style);
     return 'box-shadow: 0 2px 4px rgba(0,0,0,0.1);'; // fallback
   }
 
