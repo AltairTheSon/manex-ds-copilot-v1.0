@@ -44,9 +44,9 @@ npm run validate-deployment
 
 ## Deployment Process
 
-1. Netlify will use Node.js 18 and npm 9
+1. Netlify will use Node.js 20 and npm 10
 2. Runs `npm run build:netlify` command
-3. Publishes `dist/figma-ds-copilot/browser` directory
+3. Publishes `dist/manex-ds-copilot/browser` directory
 4. Applies build processing (CSS/JS minification, image compression)
 5. Sets up SPA routing with index.html fallback
 
@@ -71,8 +71,8 @@ If deployment still gets stuck at post-processing:
 ## Environment Variables (Set in Netlify Dashboard)
 
 ```
-NODE_VERSION=18
-NPM_VERSION=9
+NODE_VERSION=20
+NPM_VERSION=10
 CI=true
 NODE_ENV=production
 ```
