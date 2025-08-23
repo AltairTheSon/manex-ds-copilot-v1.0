@@ -33,9 +33,13 @@ export class MCPConnectionService {
    */
   validateConnection(credentials: MCPCredentials): Observable<boolean> {
     const headers = this.getHeaders(credentials);
+    console.log('MCPService: Making API call to validate connection at', credentials.serverUrl);
     
     return this.http.get(`${credentials.serverUrl}/health`, { headers }).pipe(
-      map(() => true),
+      map(() => {
+        console.log('MCPService: Connection validation successful');
+        return true;
+      }),
       catchError((error) => {
         console.error('MCP connection validation failed:', error);
         return throwError(() => ({ 
@@ -51,11 +55,16 @@ export class MCPConnectionService {
    */
   getFileData(credentials: MCPCredentials): Observable<MCPFileResponse> {
     const headers = this.getHeaders(credentials);
+    console.log('MCPService: Making API call to fetch file data from', credentials.serverUrl);
     
     return this.http.get<MCPFileResponse>(
       `${credentials.serverUrl}/projects/${credentials.projectId}/file`, 
       { headers }
     ).pipe(
+      map((response) => {
+        console.log('MCPService: Successfully fetched file data');
+        return response;
+      }),
       catchError(this.handleError)
     );
   }
@@ -71,9 +80,16 @@ export class MCPConnectionService {
     artboards: ProcessedArtboard[];
     fileInfo: { name: string; lastModified: string; version: string };
   }> {
+    console.log('MCPService: Starting enhanced analysis for MCP project');
     return this.getFileData(credentials).pipe(
-      map((mcpData) => this.convertMCPToFigmaFormat(mcpData)),
-      catchError(this.handleError)
+      map((mcpData) => {
+        console.log('MCPService: Converting MCP data to Figma-compatible format');
+        return this.convertMCPToFigmaFormat(mcpData);
+      }),
+      catchError((error) => {
+        console.error('MCPService: Enhanced analysis failed:', error);
+        return this.handleError(error);
+      })
     );
   }
 
@@ -88,74 +104,54 @@ export class MCPConnectionService {
     artboards: ProcessedArtboard[];
     fileInfo: { name: string; lastModified: string; version: string };
   } {
-    // This is a placeholder implementation that would need to be customized
-    // based on the actual MCP server response format
-    return {
-      pages: this.extractPagesFromMCP(mcpData),
-      designTokens: this.extractDesignTokensFromMCP(mcpData),
-      localStyles: this.extractLocalStylesFromMCP(mcpData),
-      components: this.extractComponentsFromMCP(mcpData),
-      artboards: this.extractArtboardsFromMCP(mcpData),
-      fileInfo: {
-        name: mcpData.name,
-        lastModified: mcpData.lastModified,
-        version: mcpData.version
-      }
-    };
+    // MCP integration is not currently implemented - would require actual MCP server specification
+    console.error('MCPService: MCP format conversion not implemented - requires MCP server specification');
+    throw new Error('MCP format conversion not implemented: Real MCP server API specification and format documentation required for implementation');
   }
 
   /**
    * Extract pages from MCP data
    */
   private extractPagesFromMCP(mcpData: MCPFileResponse): FigmaPage[] {
-    // Placeholder implementation - would need actual MCP format
-    return [
-      {
-        id: 'mcp-page-1',
-        name: 'MCP Page',
-        thumbnail: '',
-        children: []
-      }
-    ];
+    // MCP format is not currently implemented - this would require 
+    // actual MCP server specification and real API documentation
+    throw new Error('MCP pages extraction not implemented: MCP server format specification required for real implementation');
   }
 
   /**
    * Extract design tokens from MCP data
    */
   private extractDesignTokensFromMCP(mcpData: MCPFileResponse): DesignToken[] {
-    // Placeholder implementation - would need actual MCP format
-    return [
-      {
-        name: 'MCP Token',
-        value: '#007AFF',
-        type: 'color',
-        category: 'primary'
-      }
-    ];
+    // MCP format is not currently implemented - this would require 
+    // actual MCP server specification and real API documentation
+    throw new Error('MCP design tokens extraction not implemented: MCP server format specification required for real implementation');
   }
 
   /**
    * Extract local styles from MCP data
    */
   private extractLocalStylesFromMCP(mcpData: MCPFileResponse): LocalStyle[] {
-    // Placeholder implementation
-    return [];
+    // MCP format is not currently implemented - this would require 
+    // actual MCP server specification and real API documentation
+    throw new Error('MCP local styles extraction not implemented: MCP server format specification required for real implementation');
   }
 
   /**
    * Extract components from MCP data
    */
   private extractComponentsFromMCP(mcpData: MCPFileResponse): FigmaComponent[] {
-    // Placeholder implementation
-    return [];
+    // MCP format is not currently implemented - this would require 
+    // actual MCP server specification and real API documentation
+    throw new Error('MCP components extraction not implemented: MCP server format specification required for real implementation');
   }
 
   /**
    * Extract artboards from MCP data
    */
   private extractArtboardsFromMCP(mcpData: MCPFileResponse): ProcessedArtboard[] {
-    // Placeholder implementation
-    return [];
+    // MCP format is not currently implemented - this would require 
+    // actual MCP server specification and real API documentation
+    throw new Error('MCP artboards extraction not implemented: MCP server format specification required for real implementation');
   }
 
   /**
