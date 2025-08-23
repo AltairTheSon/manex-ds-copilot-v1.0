@@ -60,7 +60,7 @@ export interface FigmaComponent {
   description: string;
   documentationLinks: FigmaDocumentationLink[];
   id?: string;
-  thumbnail?: string;
+  thumbnail?: string | null;
   variants?: ComponentVariant[];
   properties?: ComponentProperty[];
 }
@@ -145,7 +145,7 @@ export interface FigmaImageResponse {
 export interface ProcessedArtboard {
   id: string;
   name: string;
-  imageUrl: string;
+  imageUrl: string | null;
   width: number;
   height: number;
   backgroundColor?: string;
@@ -178,7 +178,7 @@ export interface FigmaFileData {
 export interface FigmaPage {
   id: string;
   name: string;
-  thumbnail: string;
+  thumbnail: string | null;
   children?: FigmaNode[];
 }
 
@@ -208,7 +208,7 @@ export interface Artboard {
   id: string;
   name: string;
   type: 'FRAME';
-  thumbnail: string;
+  thumbnail: string | null;
   absoluteBoundingBox: {
     x: number;
     y: number;

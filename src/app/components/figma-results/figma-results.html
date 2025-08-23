@@ -68,11 +68,16 @@
         <div class="page-card" *ngFor="let page of pages" (click)="onPageClick(page)">
           <div class="page-image">
             <img 
+              *ngIf="page.thumbnail"
               [src]="page.thumbnail" 
               [alt]="page.name"
               (error)="onImageError($event)"
               loading="lazy"
             />
+            <div *ngIf="!page.thumbnail" class="thumbnail-placeholder">
+              <i class="ri-file-copy-2-line"></i>
+              <span>No preview available</span>
+            </div>
             <div class="page-overlay">
               <div class="page-children-count">
                 {{ page.children?.length || 0 }} frames
@@ -130,11 +135,16 @@
         <div class="artboard-card" *ngFor="let artboard of pageArtboards">
           <div class="artboard-image">
             <img 
+              *ngIf="artboard.thumbnail"
               [src]="artboard.thumbnail" 
               [alt]="artboard.name"
               (error)="onImageError($event)"
               loading="lazy"
             />
+            <div *ngIf="!artboard.thumbnail" class="thumbnail-placeholder">
+              <i class="ri-layout-2-line"></i>
+              <span>No preview available</span>
+            </div>
             <div class="artboard-overlay">
               <div class="artboard-dimensions">
                 {{ artboard.absoluteBoundingBox.width }}×{{ artboard.absoluteBoundingBox.height }}
@@ -228,11 +238,16 @@
         <div class="component-card" *ngFor="let component of components">
           <div class="component-image">
             <img 
-              [src]="component.thumbnail || 'assets/component-placeholder.png'" 
+              *ngIf="component.thumbnail"
+              [src]="component.thumbnail" 
               [alt]="component.name"
               (error)="onImageError($event)"
               loading="lazy"
             />
+            <div *ngIf="!component.thumbnail" class="thumbnail-placeholder">
+              <i class="ri-puzzle-line"></i>
+              <span>No preview available</span>
+            </div>
             <div class="component-overlay" *ngIf="component.variants && component.variants.length">
               <div class="variant-count">
                 {{ component.variants.length }} variants
