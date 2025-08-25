@@ -108,23 +108,96 @@ export class FigmaService {
   }
 
   /**
-   * Get image URLs for specific node IDs
+   * Get image URLs for specific node IDs with automatic batching to avoid URL length limits
    */
   getImages(credentials: FigmaCredentials, nodeIds: string[]): Observable<FigmaImageResponse> {
-    console.log('Figma API: Fetching images for node IDs:', nodeIds);
+    const BATCH_SIZE = 50; // Maximum 50 node IDs per request to avoid URL length limits
+    
+    // Filter out invalid node IDs
+    const validNodeIds = nodeIds.filter(id => 
+      id && 
+      id.trim() && 
+      id !== 'undefined' && 
+      id !== 'null' &&
+      !id.startsWith('I') // Remove instance IDs that might cause issues
+    );
+    
+    if (validNodeIds.length === 0) {
+      console.log('Figma API: No valid node IDs provided');
+      return of({ images: {} });
+    }
+    
+    // Split nodeIds into batches
+    const batches: string[][] = [];
+    for (let i = 0; i < validNodeIds.length; i += BATCH_SIZE) {
+      batches.push(validNodeIds.slice(i, i + BATCH_SIZE));
+    }
+    
+    console.log(`Figma API: Splitting ${validNodeIds.length} node IDs into ${batches.length} batches`);
+    
+    // Execute all batches in parallel
+    const batchRequests = batches.map(batch => this.getImagesBatch(credentials, batch));
+    
+    return forkJoin(batchRequests).pipe(
+      map((responses: FigmaImageResponse[]) => {
+        // Merge all responses into single response
+        const mergedImages: { [key: string]: string } = {};
+        responses.forEach(response => {
+          Object.assign(mergedImages, response.images);
+        });
+        
+        console.log(`Figma API: Successfully fetched ${Object.keys(mergedImages).length} thumbnails from ${batches.length} batches`);
+        
+        return { images: mergedImages };
+      }),
+      catchError(error => {
+        console.error('Figma API: Batch image requests failed:', error);
+        return this.handleError(error);
+      })
+    );
+  }
+
+  /**
+   * Get images for a single batch of node IDs
+   */
+  private getImagesBatch(credentials: FigmaCredentials, nodeIds: string[]): Observable<FigmaImageResponse> {
     const headers = this.getHeaders(credentials.accessToken);
     const ids = nodeIds.join(',');
+    const url = `${this.FIGMA_API_BASE}/images/${credentials.fileId}?ids=${ids}&format=png&scale=2`;
     
-    return this.http.get<FigmaImageResponse>(
-      `${this.FIGMA_API_BASE}/images/${credentials.fileId}?ids=${ids}&format=png&scale=2`,
-      { headers }
-    ).pipe(
+    // Validate URL length
+    if (!this.validateUrlLength(url)) {
+      console.warn(`Figma API: Batch URL still too long (${url.length} chars), skipping batch`);
+      return of({ images: {} });
+    }
+    
+    console.log(`Figma API: Fetching batch of ${nodeIds.length} thumbnails`);
+    
+    return this.http.get<FigmaImageResponse>(url, { headers }).pipe(
       map((response) => {
-        console.log('Figma API: Successfully fetched images for', Object.keys(response.images).length, 'nodes');
+        console.log(`Figma API: Batch request successful - received ${Object.keys(response.images).length} images`);
         return response;
       }),
-      catchError(this.handleError)
+      catchError(error => {
+        console.error(`Figma API: Batch request failed for ${nodeIds.length} nodes:`, error);
+        // Return empty response for failed batch instead of failing entire request
+        return of({ images: {} });
+      })
     );
+  }
+
+  /**
+   * Validate URL length to prevent network errors
+   */
+  private validateUrlLength(url: string): boolean {
+    const MAX_URL_LENGTH = 2048; // Conservative limit
+    
+    if (url.length > MAX_URL_LENGTH) {
+      console.warn(`Figma API: URL too long (${url.length} chars), maximum is ${MAX_URL_LENGTH}`);
+      return false;
+    }
+    
+    return true;
   }
 
   /**
@@ -558,14 +631,19 @@ export class FigmaService {
         const localStyles = this.extractLocalStyles(stylesData, fileData);
         const extractedComponents = this.extractComponents(componentsData, fileData);
         
-        // Get ALL node IDs for thumbnails - comprehensive collection
+        // Get ALL node IDs for thumbnails - comprehensive collection with deduplication
         const allNodeIds = [
           ...pages.map(p => p.id),
           ...extractedComponents.map(c => c.id || c.key),
           ...this.findAllFrames(fileData)
-        ].filter((id, index, array) => array.indexOf(id) === index); // Remove duplicates
+        ].filter(id => 
+          id && 
+          id.trim() && 
+          id !== 'undefined' && 
+          id !== 'null'
+        ).filter((id, index, array) => array.indexOf(id) === index); // Remove duplicates
         
-        console.log(`Figma API: Fetching thumbnails for ${allNodeIds.length} total nodes`);
+        console.log(`Figma API: Collected ${allNodeIds.length} unique valid node IDs for thumbnails`);
         
         // Fetch ALL thumbnails
         if (allNodeIds.length > 0) {
@@ -649,13 +727,19 @@ export class FigmaService {
   }
 
   /**
-   * Extract all frames as artboards/thumbnails - comprehensive search
+   * Extract all frames as artboards/thumbnails - comprehensive search with limits
    */
   private findAllFrames(fileData: FigmaFileResponse): string[] {
     console.log('Figma API: Searching for all frames in document tree');
     const frameIds: string[] = [];
+    const MAX_FRAMES = 200; // Limit to prevent excessive requests
     
     const traverseNode = (node: FigmaNode) => {
+      // Stop if we already have enough frames
+      if (frameIds.length >= MAX_FRAMES) {
+        return;
+      }
+      
       // Find all FRAME type nodes at any level
       if (node.type === 'FRAME' && node.absoluteBoundingBox) {
         frameIds.push(node.id);
@@ -676,7 +760,7 @@ export class FigmaService {
       fileData.document.children.forEach(page => traverseNode(page));
     }
     
-    console.log(`Figma API: Found ${frameIds.length} total frames/instances for thumbnails`);
+    console.log(`Figma API: Found ${frameIds.length} total frames/instances for thumbnails (limited to ${MAX_FRAMES})`);
     return frameIds;
   }
 
@@ -1150,7 +1234,13 @@ export class FigmaService {
     let errorMessage = 'An error occurred while connecting to Figma';
     
     if (error.status === 0) {
-      errorMessage = 'Network error: Unable to connect to Figma API. Check CORS configuration.';
+      if (error.url && error.url.length > 2048) {
+        errorMessage = 'Request URL too long. Retrying with smaller batches...';
+      } else {
+        errorMessage = 'Network error: Unable to connect to Figma API. Check CORS configuration.';
+      }
+    } else if (error.status === 414) {
+      errorMessage = 'Request URL too long. The request will be split into smaller batches.';
     } else if (error.status === 401) {
       errorMessage = 'Invalid access token. Please check your Figma access token.';
     } else if (error.status === 403) {
