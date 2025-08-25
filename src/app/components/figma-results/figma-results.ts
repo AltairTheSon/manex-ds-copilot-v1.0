@@ -19,14 +19,14 @@ export class FigmaResults {
   @Input() isLoading = false;
   @Input() syncStatus: { lastSynced: string; isAutoSync: boolean } = { lastSynced: '', isAutoSync: false };
 
-  @Output() fetchPageArtboards = new EventEmitter<{ pageId: string; pageName: string }>();
+  @Output() fetchPageFrames = new EventEmitter<{ pageId: string; pageName: string }>();
 
   selectedTab: 'pages' | 'tokens' | 'components' | 'sync' = 'pages';
   
-  // Page artboards navigation state
+  // Page frames navigation state
   selectedPage: FigmaPage | null = null;
-  pageArtboards: Artboard[] = [];
-  isLoadingArtboards = false;
+  pageFrames: Artboard[] = [];
+  isLoadingFrames = false;
 
   // Modal states
   showSyncHistoryModal = false;
@@ -37,17 +37,17 @@ export class FigmaResults {
     // Reset page selection when switching tabs
     if (tab !== 'pages') {
       this.selectedPage = null;
-      this.pageArtboards = [];
+      this.pageFrames = [];
     }
   }
 
   /**
-   * Handle page click - navigate to artboards view
+   * Handle page click - navigate to frames view
    */
   onPageClick(page: FigmaPage): void {
     this.selectedPage = page;
-    this.isLoadingArtboards = true;
-    this.fetchPageArtboards.emit({ pageId: page.id, pageName: page.name });
+    this.isLoadingFrames = true;
+    this.fetchPageFrames.emit({ pageId: page.id, pageName: page.name });
   }
 
   /**
@@ -55,23 +55,23 @@ export class FigmaResults {
    */
   backToPages(): void {
     this.selectedPage = null;
-    this.pageArtboards = [];
-    this.isLoadingArtboards = false;
+    this.pageFrames = [];
+    this.isLoadingFrames = false;
   }
 
   /**
-   * Set page artboards data (called from parent component)
+   * Set page frames data (called from parent component)
    */
-  setPageArtboards(artboards: Artboard[]): void {
-    this.pageArtboards = artboards;
-    this.isLoadingArtboards = false;
+  setPageFrames(frames: Artboard[]): void {
+    this.pageFrames = frames;
+    this.isLoadingFrames = false;
   }
 
   /**
-   * Set loading state for artboards
+   * Set loading state for frames
    */
-  setArtboardsLoading(loading: boolean): void {
-    this.isLoadingArtboards = loading;
+  setFramesLoading(loading: boolean): void {
+    this.isLoadingFrames = loading;
   }
 
   // Sync functionality methods
