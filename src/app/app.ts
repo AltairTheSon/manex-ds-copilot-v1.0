@@ -158,29 +158,29 @@ export class App implements OnInit {
     });
   }
 
-  onFetchPageArtboards(event: { pageId: string; pageName: string }): void {
+  onFetchPageFrames(event: { pageId: string; pageName: string }): void {
     if (!this.currentCredentials) {
-      console.error('No credentials available for fetching artboards');
+      console.error('No credentials available for fetching frames');
       return;
     }
 
-    this.figmaResults.setArtboardsLoading(true);
+    this.figmaResults.setFramesLoading(true);
     
-    // Only Figma service supports page artboards currently
+    // Only Figma service supports page frames currently
     if (this.currentConnectionType === 'figma') {
       this.figmaService.fetchPageArtboards(event.pageId, this.currentCredentials as FigmaCredentials).subscribe({
-        next: (artboards: Artboard[]) => {
-          this.figmaResults.setPageArtboards(artboards);
+        next: (frames: Artboard[]) => {
+          this.figmaResults.setPageFrames(frames);
         },
         error: (error) => {
-          console.error('Error fetching page artboards:', error);
-          this.figmaResults.setArtboardsLoading(false);
+          console.error('Error fetching page frames:', error);
+          this.figmaResults.setFramesLoading(false);
         }
       });
     } else {
-      // MCP doesn't support page artboards yet
-      this.figmaResults.setArtboardsLoading(false);
-      console.log('Page artboards not supported for MCP connections yet');
+      // MCP doesn't support page frames yet
+      this.figmaResults.setFramesLoading(false);
+      console.log('Page frames not supported for MCP connections yet');
     }
   }
 }

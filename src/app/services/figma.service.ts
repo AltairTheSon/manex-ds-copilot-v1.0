@@ -271,7 +271,7 @@ export class FigmaService {
   }
 
   /**
-   * Complete analysis: get both artboards and design tokens
+   * Complete analysis: get both frames and design tokens
    */
   getCompleteAnalysis(credentials: FigmaCredentials): Observable<{
     artboards: ProcessedArtboard[];
