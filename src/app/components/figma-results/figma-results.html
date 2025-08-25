@@ -217,15 +217,30 @@
   <div class="tab-content" *ngIf="selectedTab === 'components'">
     <div class="components-header" *ngIf="components.length > 0">
       <div class="filter-buttons">
-        <button class="filter-button active">All Components</button>
-        <button class="filter-button">With Variants</button>
-        <button class="filter-button">Recently Used</button>
+        <button 
+          class="filter-button"
+          [class.active]="selectedComponentFilter === 'all'"
+          (click)="selectComponentFilter('all')">
+          All Components
+        </button>
+        <button 
+          class="filter-button"
+          [class.active]="selectedComponentFilter === 'withVariants'"
+          (click)="selectComponentFilter('withVariants')">
+          With Variants
+        </button>
+        <button 
+          class="filter-button"
+          [class.active]="selectedComponentFilter === 'recentlyUsed'"
+          (click)="selectComponentFilter('recentlyUsed')">
+          Recently Used
+        </button>
       </div>
     </div>
 
     <div class="components-content" *ngIf="components.length > 0; else noComponents">
       <div class="components-grid">
-        <div class="component-card" *ngFor="let component of components">
+        <div class="component-card" *ngFor="let component of getFilteredComponents()">
           <div class="component-image">
             <img 
               [src]="component.thumbnail || 'assets/component-placeholder.png'" 

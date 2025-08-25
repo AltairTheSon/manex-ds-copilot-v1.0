@@ -352,7 +352,7 @@ export class FigmaService {
         
         if (!page || !page.children) {
           console.error('Figma API: Page not found or has no children:', pageId);
-          return throwError(() => new Error('Page not found or has no children'));
+          return of([]); // Return empty array instead of error
         }
 
         const artboards: Artboard[] = [];
@@ -393,6 +393,10 @@ export class FigmaService {
           console.log('Figma API: No artboards found in page');
           return of(artboards);
         }
+      }),
+      catchError(error => {
+        console.error('Figma API: Error fetching page frames:', error);
+        return of([]); // Return empty array on error
       })
     );
   }

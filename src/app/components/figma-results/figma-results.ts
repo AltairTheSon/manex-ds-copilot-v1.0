@@ -28,6 +28,9 @@ export class FigmaResults {
   pageFrames: Artboard[] = [];
   isLoadingFrames = false;
 
+  // Component filter state
+  selectedComponentFilter: 'all' | 'withVariants' | 'recentlyUsed' = 'all';
+
   // Modal states
   showSyncHistoryModal = false;
   showSyncSettingsModal = false;
@@ -121,6 +124,25 @@ export class FigmaResults {
 
   getComponentsWithVariants(): FigmaComponent[] {
     return this.components.filter(component => component.variants && component.variants.length > 0);
+  }
+
+  // Component filtering methods
+  selectComponentFilter(filter: 'all' | 'withVariants' | 'recentlyUsed'): void {
+    this.selectedComponentFilter = filter;
+  }
+
+  getFilteredComponents(): FigmaComponent[] {
+    switch (this.selectedComponentFilter) {
+      case 'withVariants':
+        return this.components.filter(component => 
+          component.variants && component.variants.length > 0
+        );
+      case 'recentlyUsed':
+        // TODO: Implement recently used logic based on usage tracking
+        return this.components.slice(0, 10); // Show first 10 as recently used for now
+      default:
+        return this.components;
+    }
   }
 
   formatDate(dateString: string): string {
