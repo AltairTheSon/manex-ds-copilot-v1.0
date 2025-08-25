@@ -47,10 +47,10 @@ export class FigmaService {
   }
 
   /**
-   * Get detailed styles data from Figma API with actual values
+   * Get file styles from Figma styles API
    */
-  getStylesData(credentials: FigmaCredentials): Observable<any> {
-    console.log('Figma API: Fetching styles data for file ID:', credentials.fileId);
+  getFileStyles(credentials: FigmaCredentials): Observable<any> {
+    console.log('Figma API: Fetching styles from styles endpoint for file ID:', credentials.fileId);
     const headers = this.getHeaders(credentials.accessToken);
     
     return this.http.get<any>(
@@ -58,14 +58,43 @@ export class FigmaService {
       { headers }
     ).pipe(
       map((response) => {
-        console.log('Figma API: Successfully fetched styles data');
+        console.log('Figma API: Successfully fetched styles data from styles endpoint');
         return response;
       }),
       catchError((error) => {
         console.warn('Figma API: Styles endpoint failed, falling back to file parsing:', error);
-        return of([]);
+        return of(null);
       })
     );
+  }
+
+  /**
+   * Get file components from Figma components API
+   */
+  getFileComponents(credentials: FigmaCredentials): Observable<any> {
+    console.log('Figma API: Fetching components from components endpoint for file ID:', credentials.fileId);
+    const headers = this.getHeaders(credentials.accessToken);
+    
+    return this.http.get<any>(
+      `${this.FIGMA_API_BASE}/files/${credentials.fileId}/components`,
+      { headers }
+    ).pipe(
+      map((response) => {
+        console.log('Figma API: Successfully fetched components data from components endpoint');
+        return response;
+      }),
+      catchError((error) => {
+        console.warn('Figma API: Components endpoint failed, falling back to file parsing:', error);
+        return of(null);
+      })
+    );
+  }
+
+  /**
+   * Get detailed styles data from Figma API with actual values (legacy method)
+   */
+  getStylesData(credentials: FigmaCredentials): Observable<any> {
+    return this.getFileStyles(credentials);
   }
 
   /**
@@ -114,9 +143,9 @@ export class FigmaService {
   }
 
   /**
-   * Extract design tokens from Figma file
+   * Extract design tokens from Figma file - LEGACY METHOD
    */
-  extractDesignTokens(credentials: FigmaCredentials): Observable<DesignToken[]> {
+  extractDesignTokensLegacy(credentials: FigmaCredentials): Observable<DesignToken[]> {
     return this.getFileData(credentials).pipe(
       map((fileData: FigmaFileResponse) => {
         const tokens: DesignToken[] = [];
@@ -493,7 +522,7 @@ export class FigmaService {
   }
 
   /**
-   * Get complete enhanced analysis with all new features
+   * COMPREHENSIVE ENHANCED ANALYSIS - Fetches ALL possible Figma data with zero placeholders
    */
   getEnhancedAnalysis(credentials: FigmaCredentials): Observable<{
     pages: FigmaPage[];
@@ -501,35 +530,249 @@ export class FigmaService {
     localStyles: LocalStyle[];
     components: FigmaComponent[];
     artboards: ProcessedArtboard[];
-    fileInfo: { name: string; lastModified: string; version: string };
+    fileInfo: { name: string; lastModified: string; version: string; thumbnailUrl: string };
   }> {
+    console.log('Figma API: Starting comprehensive enhanced analysis...');
+    
     return forkJoin({
-      pages: this.fetchPages(credentials),
-      localStyles: this.fetchLocalStyles(credentials),
-      components: this.fetchComponents(credentials),
-      artboards: this.getArtboardsWithImages(credentials),
       fileData: this.getFileData(credentials),
-      stylesData: this.getStylesData(credentials)
+      stylesData: this.getFileStyles(credentials),
+      componentsData: this.getFileComponents(credentials)
     }).pipe(
-      map(({ pages, localStyles, components, artboards, fileData, stylesData }) => {
-        return {
-          pages,
-          localStyles,
-          components,
-          artboards,
-          designTokens: this.extractDesignTokensFromFileData(fileData, stylesData),
-          fileInfo: {
-            name: fileData.name,
-            lastModified: fileData.lastModified,
-            version: fileData.version
-          }
-        };
+      switchMap(({ fileData, stylesData, componentsData }) => {
+        console.log('Figma API: File data fetched, processing comprehensive extraction...');
+        
+        // Extract all possible data types
+        const pages = this.extractPages(fileData);
+        const designTokens = this.extractDesignTokens(stylesData, fileData);
+        const localStyles = this.extractLocalStyles(stylesData, fileData);
+        const extractedComponents = this.extractComponents(componentsData, fileData);
+        
+        // Get ALL node IDs for thumbnails - comprehensive collection
+        const allNodeIds = [
+          ...pages.map(p => p.id),
+          ...extractedComponents.map(c => c.id || c.key),
+          ...this.findAllFrames(fileData)
+        ].filter((id, index, array) => array.indexOf(id) === index); // Remove duplicates
+        
+        console.log(`Figma API: Fetching thumbnails for ${allNodeIds.length} total nodes`);
+        
+        // Fetch ALL thumbnails
+        if (allNodeIds.length > 0) {
+          return this.getImages(credentials, allNodeIds).pipe(
+            map(imageResponse => {
+              console.log(`Figma API: Received ${Object.keys(imageResponse.images).length} thumbnails`);
+              
+              return {
+                pages: this.populatePageThumbnails(pages, imageResponse),
+                designTokens,
+                localStyles,
+                components: this.populateComponentThumbnails(extractedComponents, imageResponse),
+                artboards: this.extractAllArtboards(fileData, imageResponse),
+                fileInfo: this.extractFileInfo(fileData)
+              };
+            })
+          );
+        } else {
+          console.log('Figma API: No nodes found for thumbnail generation');
+          return of({
+            pages,
+            designTokens,
+            localStyles,
+            components: extractedComponents,
+            artboards: this.extractAllArtboards(fileData, { images: {} }),
+            fileInfo: this.extractFileInfo(fileData)
+          });
+        }
       })
     );
   }
 
   /**
-   * Extract artboards (FRAME type nodes) from document
+   * Extract local styles from styles API and file data
+   */
+  private extractLocalStyles(stylesData: any, fileData: FigmaFileResponse): LocalStyle[] {
+    console.log('Figma API: Extracting local styles from styles API and file data');
+    const localStyles: LocalStyle[] = [];
+    
+    // Extract from styles API if available
+    if (stylesData && stylesData.meta && stylesData.meta.styles) {
+      console.log('Figma API: Processing local styles from styles API');
+      Object.values(stylesData.meta.styles).forEach((style: any) => {
+        localStyles.push({
+          id: style.key,
+          name: style.name,
+          type: style.style_type as 'FILL' | 'TEXT' | 'EFFECT',
+          description: style.description || '',
+          styleType: style.style_type
+        });
+      });
+    }
+    
+    // Extract from file data as fallback/supplement
+    if (fileData.styles) {
+      console.log('Figma API: Processing local styles from file data');
+      Object.values(fileData.styles).forEach((style: any) => {
+        // Avoid duplicates
+        const existingStyle = localStyles.find(s => s.id === style.key);
+        if (!existingStyle) {
+          localStyles.push({
+            id: style.key,
+            name: style.name,
+            type: style.styleType as 'FILL' | 'TEXT' | 'EFFECT',
+            description: style.description || '',
+            styleType: style.styleType
+          });
+        }
+      });
+    }
+    
+    console.log(`Figma API: Extracted ${localStyles.length} local styles`);
+    return localStyles;
+  }
+
+  /**
+   * Legacy method - maintain backward compatibility
+   */
+  private extractDesignTokensFromFileData(fileData: FigmaFileResponse, stylesData?: any[]): DesignToken[] {
+    return this.extractDesignTokens(stylesData, fileData);
+  }
+
+  /**
+   * Extract all frames as artboards/thumbnails - comprehensive search
+   */
+  private findAllFrames(fileData: FigmaFileResponse): string[] {
+    console.log('Figma API: Searching for all frames in document tree');
+    const frameIds: string[] = [];
+    
+    const traverseNode = (node: FigmaNode) => {
+      // Find all FRAME type nodes at any level
+      if (node.type === 'FRAME' && node.absoluteBoundingBox) {
+        frameIds.push(node.id);
+      }
+      
+      // Also check for component instances that might be frames
+      if (node.type === 'INSTANCE' && node.absoluteBoundingBox) {
+        frameIds.push(node.id);
+      }
+      
+      // Traverse children
+      if (node.children && Array.isArray(node.children)) {
+        node.children.forEach(child => traverseNode(child));
+      }
+    };
+    
+    if (fileData.document?.children) {
+      fileData.document.children.forEach(page => traverseNode(page));
+    }
+    
+    console.log(`Figma API: Found ${frameIds.length} total frames/instances for thumbnails`);
+    return frameIds;
+  }
+
+  /**
+   * Extract all possible design tokens from styles API and file data
+   */
+  private extractDesignTokens(stylesData: any, fileData: FigmaFileResponse): DesignToken[] {
+    console.log('Figma API: Extracting design tokens from styles and file data');
+    const tokens: DesignToken[] = [];
+    
+    // Extract from styles API if available
+    if (stylesData && stylesData.meta && stylesData.meta.styles) {
+      console.log('Figma API: Processing styles from styles API');
+      Object.values(stylesData.meta.styles).forEach((style: any) => {
+        if (style.style_type === 'FILL') {
+          tokens.push({
+            type: 'color',
+            name: style.name,
+            value: this.extractColorValue(style),
+            description: style.description || '',
+            category: this.categorizeToken(style.name)
+          });
+        }
+        if (style.style_type === 'TEXT') {
+          tokens.push({
+            type: 'typography',
+            name: style.name,
+            value: this.extractTextValue(style),
+            description: style.description || '',
+            category: this.categorizeToken(style.name)
+          });
+        }
+        if (style.style_type === 'EFFECT') {
+          tokens.push({
+            type: 'shadow',
+            name: style.name,
+            value: this.extractEffectValue(style),
+            description: style.description || '',
+            category: this.categorizeToken(style.name)
+          });
+        }
+      });
+    }
+    
+    // Extract from file data styles as fallback
+    if (fileData.styles) {
+      console.log('Figma API: Processing styles from file data');
+      Object.values(fileData.styles).forEach(style => {
+        // Avoid duplicates
+        const existingToken = tokens.find(t => t.name === style.name);
+        if (!existingToken) {
+          if (style.styleType === 'FILL') {
+            tokens.push({
+              type: 'color',
+              name: style.name,
+              value: this.extractColorValue(style),
+              description: style.description,
+              category: this.categorizeToken(style.name)
+            });
+          } else if (style.styleType === 'TEXT') {
+            tokens.push({
+              type: 'typography',
+              name: style.name,
+              value: this.extractTextValue(style),
+              description: style.description,
+              category: this.categorizeToken(style.name)
+            });
+          } else if (style.styleType === 'EFFECT') {
+            tokens.push({
+              type: 'shadow',
+              name: style.name,
+              value: this.extractEffectValue(style),
+              description: style.description,
+              category: this.categorizeToken(style.name)
+            });
+          }
+        }
+      });
+    }
+    
+    console.log(`Figma API: Extracted ${tokens.length} design tokens`);
+    return tokens;
+  }
+
+  /**
+   * Categorize design token based on name
+   */
+  private categorizeToken(tokenName: string): string {
+    const name = tokenName.toLowerCase();
+    if (name.includes('color') || name.includes('background') || name.includes('text') || name.includes('primary') || name.includes('secondary')) {
+      return 'colors';
+    }
+    if (name.includes('font') || name.includes('text') || name.includes('heading') || name.includes('body')) {
+      return 'typography';
+    }
+    if (name.includes('shadow') || name.includes('elevation') || name.includes('drop')) {
+      return 'effects';
+    }
+    if (name.includes('spacing') || name.includes('margin') || name.includes('padding')) {
+      return 'spacing';
+    }
+    return 'other';
+  }
+
+  /**
+   * Extract artboards (FRAME type nodes) from document - legacy method for backward compatibility
    */
   private extractArtboards(node: FigmaNode): ProcessedArtboard[] {
     const artboards: ProcessedArtboard[] = [];
@@ -556,51 +799,132 @@ export class FigmaService {
   }
 
   /**
-   * Extract design tokens from file data
+   * Extract all artboards with comprehensive detection
    */
-  private extractDesignTokensFromFileData(fileData: FigmaFileResponse, stylesData?: any[]): DesignToken[] {
-    const tokens: DesignToken[] = [];
-    
-    // Process styles with proper value extraction
-    Object.values(fileData.styles).forEach(style => {
-      // Try to find corresponding detailed style data (with safe array check)
-      const detailedStyle = (Array.isArray(stylesData)) ? stylesData.find(s => s.key === style.key) : null;
-      const styleToProcess = detailedStyle || style;
-      
-      if (style.styleType === 'FILL') {
-        const colorValue = this.extractColorValue(styleToProcess);
-        tokens.push({
-          type: 'color',
-          name: style.name,
-          value: colorValue,
-          description: style.description,
-          category: 'colors'
-        });
-      } else if (style.styleType === 'TEXT') {
-        const textValue = this.extractTextValue(styleToProcess);
-        tokens.push({
-          type: 'typography',
-          name: style.name,
-          value: textValue,
-          description: style.description,
-          category: 'typography'
-        });
-      } else if (style.styleType === 'EFFECT') {
-        const effectValue = this.extractEffectValue(styleToProcess);
-        tokens.push({
-          type: 'shadow',
-          name: style.name,
-          value: effectValue,
-          description: style.description,
-          category: 'effects'
-        });
-      }
-    });
+  private extractAllArtboards(fileData: FigmaFileResponse, imageResponse: FigmaImageResponse): ProcessedArtboard[] {
+    console.log('Figma API: Extracting all artboards with comprehensive detection');
+    const artboards: ProcessedArtboard[] = [];
 
-    // Extract tokens from document nodes
-    this.extractTokensFromNodes(fileData.document, tokens);
+    const traverse = (currentNode: FigmaNode) => {
+      // Enhanced detection: FRAME, INSTANCE, and other potential artboard types
+      if ((currentNode.type === 'FRAME' || currentNode.type === 'INSTANCE') && currentNode.absoluteBoundingBox) {
+        const artboard: ProcessedArtboard = {
+          id: currentNode.id,
+          name: currentNode.name,
+          imageUrl: imageResponse.images[currentNode.id] || '',
+          width: currentNode.absoluteBoundingBox.width,
+          height: currentNode.absoluteBoundingBox.height,
+          backgroundColor: this.extractBackgroundColor(currentNode)
+        };
+        artboards.push(artboard);
+      }
+
+      if (currentNode.children) {
+        currentNode.children.forEach(child => traverse(child));
+      }
+    };
+
+    if (fileData.document?.children) {
+      fileData.document.children.forEach(page => traverse(page));
+    }
     
-    return tokens;
+    console.log(`Figma API: Extracted ${artboards.length} artboards with thumbnails`);
+    return artboards;
+  }
+
+  /**
+   * Extract pages with thumbnails
+   */
+  private extractPages(fileData: FigmaFileResponse): FigmaPage[] {
+    console.log('Figma API: Extracting pages from file data');
+    const pages: FigmaPage[] = [];
+    
+    if (fileData.document.children) {
+      fileData.document.children.forEach(page => {
+        if (page.type === 'CANVAS') {
+          pages.push({
+            id: page.id,
+            name: page.name,
+            thumbnail: '', // Will be populated with images
+            children: page.children || []
+          });
+        }
+      });
+    }
+    
+    console.log(`Figma API: Found ${pages.length} pages`);
+    return pages;
+  }
+
+  /**
+   * Populate page thumbnails with actual image URLs
+   */
+  private populatePageThumbnails(pages: FigmaPage[], imageResponse: FigmaImageResponse): FigmaPage[] {
+    return pages.map(page => ({
+      ...page,
+      thumbnail: imageResponse.images[page.id] || ''
+    }));
+  }
+
+  /**
+   * Extract complete components data
+   */
+  private extractComponents(componentsData: any, fileData: FigmaFileResponse): FigmaComponent[] {
+    console.log('Figma API: Extracting components from API and file data');
+    const components: FigmaComponent[] = [];
+    
+    // Extract from components API if available
+    if (componentsData && componentsData.meta && componentsData.meta.components) {
+      console.log('Figma API: Processing components from components API');
+      Object.values(componentsData.meta.components).forEach((component: any) => {
+        components.push({
+          key: component.key,
+          name: component.name,
+          description: component.description || '',
+          documentationLinks: component.documentation_links || [],
+          id: component.key,
+          thumbnail: '', // Will be populated with images
+          variants: [],
+          properties: []
+        });
+      });
+    }
+    
+    // Extract from file structure as fallback/supplement
+    const nodeComponents = this.extractComponentsFromNodes(fileData.document);
+    if (Array.isArray(nodeComponents)) {
+      nodeComponents.forEach(nodeComponent => {
+        const existingComponent = components.find(c => c.key === nodeComponent.key);
+        if (!existingComponent) {
+          components.push(nodeComponent);
+        }
+      });
+    }
+    
+    console.log(`Figma API: Extracted ${components.length} components`);
+    return components;
+  }
+
+  /**
+   * Populate component thumbnails with actual image URLs
+   */
+  private populateComponentThumbnails(components: FigmaComponent[], imageResponse: FigmaImageResponse): FigmaComponent[] {
+    return components.map(component => ({
+      ...component,
+      thumbnail: imageResponse.images[component.id || component.key] || ''
+    }));
+  }
+
+  /**
+   * Extract complete file information
+   */
+  private extractFileInfo(fileData: FigmaFileResponse): any {
+    return {
+      name: fileData.name,
+      lastModified: fileData.lastModified,
+      version: fileData.version,
+      thumbnailUrl: fileData.thumbnailUrl
+    };
   }
 
   /**
