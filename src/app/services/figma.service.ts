@@ -23,9 +23,19 @@ import {
   providedIn: 'root'
 })
 export class FigmaService {
-  private readonly FIGMA_API_BASE = 'https://api.figma.com/v1';
+  private readonly FIGMA_API_BASE = this.isProduction() ? 'https://api.figma.com/v1' : '/api/figma';
 
   constructor(private http: HttpClient) {}
+
+  /**
+   * Check if running in production
+   */
+  private isProduction(): boolean {
+    return typeof window !== 'undefined' && 
+           (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' || 
+            window.location.hostname.includes('dev')) === false;
+  }
 
   /**
    * Get Figma file data including all frames and design information
@@ -1116,21 +1126,32 @@ export class FigmaService {
 
   /**
    * Create HTTP headers with authorization
+   * Note: Removed Content-Type to avoid CORS preflight for GET requests
    */
   private getHeaders(accessToken: string): HttpHeaders {
     return new HttpHeaders({
-      'X-Figma-Token': accessToken,
-      'Content-Type': 'application/json'
+      'X-Figma-Token': accessToken
     });
   }
 
   /**
-   * Handle HTTP errors
+   * Handle HTTP errors with enhanced CORS and network error detection
    */
   private handleError = (error: any): Observable<never> => {
+    console.error('Figma API Error Details:', {
+      status: error.status,
+      statusText: error.statusText,
+      message: error.message,
+      url: error.url,
+      headers: error.headers,
+      type: error.type || 'Unknown'
+    });
+    
     let errorMessage = 'An error occurred while connecting to Figma';
     
-    if (error.status === 401) {
+    if (error.status === 0) {
+      errorMessage = 'Network error: Unable to connect to Figma API. Check CORS configuration.';
+    } else if (error.status === 401) {
       errorMessage = 'Invalid access token. Please check your Figma access token.';
     } else if (error.status === 403) {
       errorMessage = 'Access denied. Please ensure you have permission to access this file.';
