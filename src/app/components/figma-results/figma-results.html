@@ -88,7 +88,7 @@
               </div>
               <div class="detail-item">
                 <i class="ri-cursor-line"></i>
-                Click to view artboards
+                Click to view frames
               </div>
             </div>
           </div>
@@ -104,64 +104,64 @@
       </ng-template>
     </div>
 
-    <!-- Page Artboards View -->
+    <!-- Page Frames View -->
     <div *ngIf="selectedPage">
-      <div class="page-artboards-header">
+      <div class="page-frames-header">
         <button class="back-button" (click)="backToPages()">
           <i class="ri-arrow-left-line"></i>
           Back to Pages
         </button>
         <div class="page-info">
           <h2 class="page-title">{{ selectedPage.name }}</h2>
-          <p class="page-subtitle">Artboards within this page</p>
+          <p class="page-subtitle">Frames within this page</p>
         </div>
       </div>
 
-      <!-- Loading state for artboards -->
-      <div class="loading-artboards" *ngIf="isLoadingArtboards">
+      <!-- Loading state for frames -->
+      <div class="loading-frames" *ngIf="isLoadingFrames">
         <div class="loading-spinner">
           <i class="ri-loader-4-line"></i>
         </div>
-        <p>Loading artboards...</p>
+        <p>Loading frames...</p>
       </div>
 
-      <!-- Artboards Grid -->
-      <div class="artboards-grid" *ngIf="!isLoadingArtboards && pageArtboards.length > 0">
-        <div class="artboard-card" *ngFor="let artboard of pageArtboards">
-          <div class="artboard-image">
+      <!-- Frames Grid -->
+      <div class="frames-grid" *ngIf="!isLoadingFrames && pageFrames.length > 0">
+        <div class="frame-card" *ngFor="let frame of pageFrames">
+          <div class="frame-image">
             <img 
-              [src]="artboard.thumbnail" 
-              [alt]="artboard.name"
+              [src]="frame.thumbnail" 
+              [alt]="frame.name"
               (error)="onImageError($event)"
               loading="lazy"
             />
-            <div class="artboard-overlay">
-              <div class="artboard-dimensions">
-                {{ artboard.absoluteBoundingBox.width }}×{{ artboard.absoluteBoundingBox.height }}
+            <div class="frame-overlay">
+              <div class="frame-dimensions">
+                {{ frame.absoluteBoundingBox.width }}×{{ frame.absoluteBoundingBox.height }}
               </div>
             </div>
           </div>
-          <div class="artboard-info">
-            <h3 class="artboard-name">{{ artboard.name }}</h3>
-            <div class="artboard-details">
+          <div class="frame-info">
+            <h3 class="frame-name">{{ frame.name }}</h3>
+            <div class="frame-details">
               <div class="detail-item">
                 <i class="ri-ruler-line"></i>
-                {{ artboard.absoluteBoundingBox.width }}×{{ artboard.absoluteBoundingBox.height }}
+                {{ frame.absoluteBoundingBox.width }}×{{ frame.absoluteBoundingBox.height }}
               </div>
               <div class="detail-item">
                 <i class="ri-layout-2-line"></i>
-                {{ artboard.type }}
+                {{ frame.type }}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- No artboards found -->
-      <div class="empty-state" *ngIf="!isLoadingArtboards && pageArtboards.length === 0">
+      <!-- No frames found -->
+      <div class="empty-state" *ngIf="!isLoadingFrames && pageFrames.length === 0">
         <i class="ri-layout-grid-line"></i>
-        <h3>No Artboards Found</h3>
-        <p>This page doesn't contain any frame artboards.</p>
+        <h3>No Frames Found</h3>
+        <p>This page doesn't contain any frames.</p>
       </div>
     </div>
   </div>
@@ -217,15 +217,30 @@
   <div class="tab-content" *ngIf="selectedTab === 'components'">
     <div class="components-header" *ngIf="components.length > 0">
       <div class="filter-buttons">
-        <button class="filter-button active">All Components</button>
-        <button class="filter-button">With Variants</button>
-        <button class="filter-button">Recently Used</button>
+        <button 
+          class="filter-button"
+          [class.active]="selectedComponentFilter === 'all'"
+          (click)="selectComponentFilter('all')">
+          All Components
+        </button>
+        <button 
+          class="filter-button"
+          [class.active]="selectedComponentFilter === 'withVariants'"
+          (click)="selectComponentFilter('withVariants')">
+          With Variants
+        </button>
+        <button 
+          class="filter-button"
+          [class.active]="selectedComponentFilter === 'recentlyUsed'"
+          (click)="selectComponentFilter('recentlyUsed')">
+          Recently Used
+        </button>
       </div>
     </div>
 
     <div class="components-content" *ngIf="components.length > 0; else noComponents">
       <div class="components-grid">
-        <div class="component-card" *ngFor="let component of components">
+        <div class="component-card" *ngFor="let component of getFilteredComponents()">
           <div class="component-image">
             <img 
               [src]="component.thumbnail || 'assets/component-placeholder.png'" 
@@ -337,7 +352,7 @@
       <i class="ri-loader-4-line"></i>
     </div>
     <h2>Processing Figma File...</h2>
-    <p>Extracting artboards and design tokens from your file</p>
+    <p>Extracting frames and design tokens from your file</p>
   </div>
 </div>
 

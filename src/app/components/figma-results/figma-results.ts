@@ -20,14 +20,17 @@ export class FigmaResults implements OnDestroy {
   @Input() isLoading = false;
   @Input() syncStatus: { lastSynced: string; isAutoSync: boolean } = { lastSynced: '', isAutoSync: false };
 
-  @Output() fetchPageArtboards = new EventEmitter<{ pageId: string; pageName: string }>();
+  @Output() fetchPageFrames = new EventEmitter<{ pageId: string; pageName: string }>();
 
   selectedTab: 'pages' | 'tokens' | 'components' | 'sync' = 'pages';
   
-  // Page artboards navigation state
+  // Page frames navigation state
   selectedPage: FigmaPage | null = null;
-  pageArtboards: Artboard[] = [];
-  isLoadingArtboards = false;
+  pageFrames: Artboard[] = [];
+  isLoadingFrames = false;
+
+  // Component filter state
+  selectedComponentFilter: 'all' | 'withVariants' | 'recentlyUsed' = 'all';
 
   // Modal states
   showSyncHistoryModal = false;
@@ -63,17 +66,17 @@ export class FigmaResults implements OnDestroy {
     // Reset page selection when switching tabs
     if (tab !== 'pages') {
       this.selectedPage = null;
-      this.pageArtboards = [];
+      this.pageFrames = [];
     }
   }
 
   /**
-   * Handle page click - navigate to artboards view
+   * Handle page click - navigate to frames view
    */
   onPageClick(page: FigmaPage): void {
     this.selectedPage = page;
-    this.isLoadingArtboards = true;
-    this.fetchPageArtboards.emit({ pageId: page.id, pageName: page.name });
+    this.isLoadingFrames = true;
+    this.fetchPageFrames.emit({ pageId: page.id, pageName: page.name });
   }
 
   /**
@@ -81,23 +84,23 @@ export class FigmaResults implements OnDestroy {
    */
   backToPages(): void {
     this.selectedPage = null;
-    this.pageArtboards = [];
-    this.isLoadingArtboards = false;
+    this.pageFrames = [];
+    this.isLoadingFrames = false;
   }
 
   /**
-   * Set page artboards data (called from parent component)
+   * Set page frames data (called from parent component)
    */
-  setPageArtboards(artboards: Artboard[]): void {
-    this.pageArtboards = artboards;
-    this.isLoadingArtboards = false;
+  setPageFrames(frames: Artboard[]): void {
+    this.pageFrames = frames;
+    this.isLoadingFrames = false;
   }
 
   /**
-   * Set loading state for artboards
+   * Set loading state for frames
    */
-  setArtboardsLoading(loading: boolean): void {
-    this.isLoadingArtboards = loading;
+  setFramesLoading(loading: boolean): void {
+    this.isLoadingFrames = loading;
   }
 
   // Sync functionality methods
@@ -185,6 +188,25 @@ export class FigmaResults implements OnDestroy {
 
   getComponentsWithVariants(): FigmaComponent[] {
     return this.components.filter(component => component.variants && component.variants.length > 0);
+  }
+
+  // Component filtering methods
+  selectComponentFilter(filter: 'all' | 'withVariants' | 'recentlyUsed'): void {
+    this.selectedComponentFilter = filter;
+  }
+
+  getFilteredComponents(): FigmaComponent[] {
+    switch (this.selectedComponentFilter) {
+      case 'withVariants':
+        return this.components.filter(component => 
+          component.variants && component.variants.length > 0
+        );
+      case 'recentlyUsed':
+        // TODO: Implement recently used logic based on usage tracking
+        return this.components.slice(0, 10); // Show first 10 as recently used for now
+      default:
+        return this.components;
+    }
   }
 
   formatDate(dateString: string): string {

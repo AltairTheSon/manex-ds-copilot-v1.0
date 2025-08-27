@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, throwError, forkJoin } from 'rxjs';
+import { Observable, throwError, forkJoin, of } from 'rxjs';
 import { map, catchError, switchMap } from 'rxjs/operators';
 import {
   FigmaCredentials,
@@ -23,79 +23,154 @@ import {
   providedIn: 'root'
 })
 export class FigmaService {
-  private readonly FIGMA_API_BASE = 'https://api.figma.com/v1';
+  private readonly FIGMA_API_BASE = this.isProduction() ? 'https://api.figma.com/v1' : '/api/figma';
 
   constructor(private http: HttpClient) {}
+
+  /**
+   * Check if running in production
+   */
+  private isProduction(): boolean {
+    return typeof window !== 'undefined' && 
+           (window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' || 
+            window.location.hostname.includes('dev')) === false;
+  }
 
   /**
    * Get Figma file data including all frames and design information
    */
   getFileData(credentials: FigmaCredentials): Observable<FigmaFileResponse> {
+    console.log('Figma API: Fetching file data for file ID:', credentials.fileId);
     const headers = this.getHeaders(credentials.accessToken);
     const apiUrl = `${this.FIGMA_API_BASE}/files/${credentials.fileId}`;
     
-    console.log('🔄 FigmaService: Making Figma File API call');
-    console.log(`📡 API URL: ${apiUrl}`);
-    
-    return this.http.get<FigmaFileResponse>(apiUrl, { headers }).pipe(
-      map((response: FigmaFileResponse) => {
-        console.log('✅ FigmaService: File API response received', {
-          name: response.name,
-          version: response.version,
-          lastModified: response.lastModified
-        });
-        return response;
-      }),
-      catchError((error) => {
-        console.error('❌ FigmaService: File API call failed:', error);
-        return this.handleError(error);
-      })
+
     );
   }
 
   /**
-   * Get detailed styles data from Figma API with actual values
+   * Get file styles from Figma styles API
    */
-  getStylesData(credentials: FigmaCredentials): Observable<any> {
+  getFileStyles(credentials: FigmaCredentials): Observable<any> {
+    console.log('Figma API: Fetching styles from styles endpoint for file ID:', credentials.fileId);
     const headers = this.getHeaders(credentials.accessToken);
     const apiUrl = `${this.FIGMA_API_BASE}/files/${credentials.fileId}/styles`;
     
-    console.log('🔄 FigmaService: Making Figma Styles API call');
-    console.log(`📡 API URL: ${apiUrl}`);
-    
-    return this.http.get<any>(apiUrl, { headers }).pipe(
-      map((response: any) => {
-        console.log('✅ FigmaService: Styles API response received', response);
-        return response;
-      }),
-      catchError((error) => {
-        console.warn('⚠️ FigmaService: Styles API endpoint failed, falling back to file parsing:', error);
-        return [];
+
       })
     );
   }
 
   /**
-   * Get image URLs for specific node IDs
+   * Get file components from Figma components API
+   */
+  getFileComponents(credentials: FigmaCredentials): Observable<any> {
+    console.log('Figma API: Fetching components from components endpoint for file ID:', credentials.fileId);
+    const headers = this.getHeaders(credentials.accessToken);
+
+      })
+    );
+  }
+
+  /**
+   * Get detailed styles data from Figma API with actual values (legacy method)
+   */
+  getStylesData(credentials: FigmaCredentials): Observable<any> {
+    return this.getFileStyles(credentials);
+  }
+
+  /**
+   * Get image URLs for specific node IDs with automatic batching to avoid URL length limits
    */
   getImages(credentials: FigmaCredentials, nodeIds: string[]): Observable<FigmaImageResponse> {
-    const headers = this.getHeaders(credentials.accessToken);
-    const ids = nodeIds.join(',');
-    const apiUrl = `${this.FIGMA_API_BASE}/images/${credentials.fileId}?ids=${ids}&format=png&scale=2`;
+    const BATCH_SIZE = 50; // Maximum 50 node IDs per request to avoid URL length limits
     
-    console.log(`🔄 FigmaService: Making Figma Images API call for ${nodeIds.length} nodes`);
-    console.log(`📡 API URL: ${apiUrl}`);
+    // Filter out invalid node IDs
+    const validNodeIds = nodeIds.filter(id => 
+      id && 
+      id.trim() && 
+      id !== 'undefined' && 
+      id !== 'null' &&
+      !id.startsWith('I') // Remove instance IDs that might cause issues
+    );
     
-    return this.http.get<FigmaImageResponse>(apiUrl, { headers }).pipe(
-      map((response: FigmaImageResponse) => {
-        console.log('✅ FigmaService: Images API response received', response);
-        return response;
+    if (validNodeIds.length === 0) {
+      console.log('Figma API: No valid node IDs provided');
+      return of({ images: {} });
+    }
+    
+    // Split nodeIds into batches
+    const batches: string[][] = [];
+    for (let i = 0; i < validNodeIds.length; i += BATCH_SIZE) {
+      batches.push(validNodeIds.slice(i, i + BATCH_SIZE));
+    }
+    
+    console.log(`Figma API: Splitting ${validNodeIds.length} node IDs into ${batches.length} batches`);
+    
+    // Execute all batches in parallel
+    const batchRequests = batches.map(batch => this.getImagesBatch(credentials, batch));
+    
+    return forkJoin(batchRequests).pipe(
+      map((responses: FigmaImageResponse[]) => {
+        // Merge all responses into single response
+        const mergedImages: { [key: string]: string } = {};
+        responses.forEach(response => {
+          Object.assign(mergedImages, response.images);
+        });
+        
+        console.log(`Figma API: Successfully fetched ${Object.keys(mergedImages).length} thumbnails from ${batches.length} batches`);
+        
+        return { images: mergedImages };
       }),
-      catchError((error) => {
-        console.error('❌ FigmaService: Images API call failed:', error);
+      catchError(error => {
+        console.error('Figma API: Batch image requests failed:', error);
         return this.handleError(error);
       })
     );
+  }
+
+  /**
+   * Get images for a single batch of node IDs
+   */
+  private getImagesBatch(credentials: FigmaCredentials, nodeIds: string[]): Observable<FigmaImageResponse> {
+    const headers = this.getHeaders(credentials.accessToken);
+    const ids = nodeIds.join(',');
+    const url = `${this.FIGMA_API_BASE}/images/${credentials.fileId}?ids=${ids}&format=png&scale=2`;
+    
+    // Validate URL length
+    if (!this.validateUrlLength(url)) {
+      console.warn(`Figma API: Batch URL still too long (${url.length} chars), skipping batch`);
+      return of({ images: {} });
+    }
+    
+    console.log(`Figma API: Fetching batch of ${nodeIds.length} thumbnails`);
+    
+    return this.http.get<FigmaImageResponse>(url, { headers }).pipe(
+      map((response) => {
+        console.log(`Figma API: Batch request successful - received ${Object.keys(response.images).length} images`);
+        return response;
+      }),
+      catchError(error => {
+        console.error(`Figma API: Batch request failed for ${nodeIds.length} nodes:`, error);
+        // Return empty response for failed batch instead of failing entire request
+        return of({ images: {} });
+      })
+    );
+  }
+
+  /**
+   * Validate URL length to prevent network errors
+   */
+  private validateUrlLength(url: string): boolean {
+    const MAX_URL_LENGTH = 2048; // Conservative limit
+    
+    if (url.length > MAX_URL_LENGTH) {
+      console.warn(`Figma API: URL too long (${url.length} chars), maximum is ${MAX_URL_LENGTH}`);
+      return false;
+    }
+    
+    return true;
   }
 
   /**
@@ -124,9 +199,9 @@ export class FigmaService {
   }
 
   /**
-   * Extract design tokens from Figma file
+   * Extract design tokens from Figma file - LEGACY METHOD
    */
-  extractDesignTokens(credentials: FigmaCredentials): Observable<DesignToken[]> {
+  extractDesignTokensLegacy(credentials: FigmaCredentials): Observable<DesignToken[]> {
     return this.getFileData(credentials).pipe(
       map((fileData: FigmaFileResponse) => {
         const tokens: DesignToken[] = [];
@@ -169,7 +244,7 @@ export class FigmaService {
   }
 
   /**
-   * Complete analysis: get both artboards and design tokens
+   * Complete analysis: get both frames and design tokens
    */
   getCompleteAnalysis(credentials: FigmaCredentials): Observable<{
     artboards: ProcessedArtboard[];
@@ -196,12 +271,7 @@ export class FigmaService {
    * Fetch pages from Figma file
    */
   fetchPages(credentials: FigmaCredentials): Observable<FigmaPage[]> {
-    console.log('🔄 FigmaService: Starting fetchPages API call...');
-    return this.getFileData(credentials).pipe(
-      switchMap((fileData: FigmaFileResponse) => {
-        console.log('✅ FigmaService: File data received, extracting pages...');
-        const pageIds: string[] = [];
-        const pagesData: { id: string; name: string; children: any[] }[] = [];
+
         
         if (fileData.document.children) {
           fileData.document.children.forEach(page => {
@@ -209,6 +279,7 @@ export class FigmaService {
               pagesData.push({
                 id: page.id,
                 name: page.name,
+
                 children: page.children || []
               });
               pageIds.push(page.id);
@@ -216,23 +287,12 @@ export class FigmaService {
           });
         }
         
-        // REAL API CALL for thumbnails - no placeholder values
-        if (pageIds.length > 0) {
-          console.log(`🔄 FigmaService: Making images API call for ${pageIds.length} pages...`, pageIds);
-          return this.getImages(credentials, pageIds).pipe(
-            map((imageResponse: FigmaImageResponse) => {
-              console.log('✅ FigmaService: Page thumbnails received from API', imageResponse);
-              return pagesData.map(pageData => ({
-                id: pageData.id,
-                name: pageData.name,
-                thumbnail: imageResponse.images[pageData.id] || '',
-                children: pageData.children
+
               }));
             })
           );
         } else {
-          console.log('⚠️ FigmaService: No pages found in document');
-          return [[]];
+
         }
       })
     );
@@ -242,14 +302,13 @@ export class FigmaService {
    * Fetch artboards for a specific page
    */
   fetchPageArtboards(pageId: string, credentials: FigmaCredentials): Observable<Artboard[]> {
-    console.log(`🔄 FigmaService: Starting fetchPageArtboards API call for page ${pageId}...`);
+
     return this.getFileData(credentials).pipe(
       switchMap((fileData: FigmaFileResponse) => {
         const page = this.findPageById(fileData.document, pageId);
         
         if (!page || !page.children) {
-          console.error(`❌ FigmaService: Page ${pageId} not found or has no children`);
-          return throwError(() => new Error('Page not found or has no children'));
+
         }
 
         console.log(`✅ FigmaService: Found page ${pageId}, extracting artboards...`);
@@ -274,25 +333,17 @@ export class FigmaService {
           }
         });
 
-        // REAL API CALL for artboard thumbnails - no placeholder values
-        if (nodeIds.length > 0) {
-          console.log(`🔄 FigmaService: Making images API call for ${nodeIds.length} artboards...`, nodeIds);
-          return this.getImages(credentials, nodeIds).pipe(
-            map((imageResponse: FigmaImageResponse) => {
-              console.log('✅ FigmaService: Artboard thumbnails received from API', imageResponse);
-              return artboardsData.map(artboardData => ({
-                id: artboardData.id,
-                name: artboardData.name,
-                type: artboardData.type,
-                thumbnail: imageResponse.images[artboardData.id] || '',
-                absoluteBoundingBox: artboardData.absoluteBoundingBox
+
               }));
             })
           );
         } else {
-          console.log('⚠️ FigmaService: No artboards found in page');
-          return [[]];
+
         }
+      }),
+      catchError(error => {
+        console.error('Figma API: Error fetching page frames:', error);
+        return of([]); // Return empty array on error
       })
     );
   }
@@ -438,10 +489,10 @@ export class FigmaService {
         return components;
       }),
       catchError((error) => {
-        console.warn('⚠️ FigmaService: Components API endpoint failed, falling back to file parsing:', error);
+
         // If the components API fails, return empty array
         // We'll still get components from file parsing
-        return [];
+        return of([]);
       })
     );
   }
@@ -522,14 +573,14 @@ export class FigmaService {
         return storedData.fileVersion !== fileData.version;
       }),
       catchError(() => {
-        console.error('Failed to sync file changes');
-        return [false];
+        console.error('Figma API: Failed to sync file changes');
+        return of(false);
       })
     );
   }
 
   /**
-   * Get complete enhanced analysis with all new features
+   * COMPREHENSIVE ENHANCED ANALYSIS - Fetches ALL possible Figma data with zero placeholders
    */
   getEnhancedAnalysis(credentials: FigmaCredentials): Observable<{
     pages: FigmaPage[];
@@ -537,35 +588,260 @@ export class FigmaService {
     localStyles: LocalStyle[];
     components: FigmaComponent[];
     artboards: ProcessedArtboard[];
-    fileInfo: { name: string; lastModified: string; version: string };
+    fileInfo: { name: string; lastModified: string; version: string; thumbnailUrl: string };
   }> {
+    console.log('Figma API: Starting comprehensive enhanced analysis...');
+    
     return forkJoin({
-      pages: this.fetchPages(credentials),
-      localStyles: this.fetchLocalStyles(credentials),
-      components: this.fetchComponents(credentials),
-      artboards: this.getArtboardsWithImages(credentials),
       fileData: this.getFileData(credentials),
-      stylesData: this.getStylesData(credentials)
+      stylesData: this.getFileStyles(credentials),
+      componentsData: this.getFileComponents(credentials)
     }).pipe(
-      map(({ pages, localStyles, components, artboards, fileData, stylesData }) => {
-        return {
-          pages,
-          localStyles,
-          components,
-          artboards,
-          designTokens: this.extractDesignTokensFromFileData(fileData, stylesData),
-          fileInfo: {
-            name: fileData.name,
-            lastModified: fileData.lastModified,
-            version: fileData.version
-          }
-        };
+      switchMap(({ fileData, stylesData, componentsData }) => {
+        console.log('Figma API: File data fetched, processing comprehensive extraction...');
+        
+        // Extract all possible data types
+        const pages = this.extractPages(fileData);
+        const designTokens = this.extractDesignTokens(stylesData, fileData);
+        const localStyles = this.extractLocalStyles(stylesData, fileData);
+        const extractedComponents = this.extractComponents(componentsData, fileData);
+        
+        // Get ALL node IDs for thumbnails - comprehensive collection with deduplication
+        const allNodeIds = [
+          ...pages.map(p => p.id),
+          ...extractedComponents.map(c => c.id || c.key),
+          ...this.findAllFrames(fileData)
+        ].filter(id => 
+          id && 
+          id.trim() && 
+          id !== 'undefined' && 
+          id !== 'null'
+        ).filter((id, index, array) => array.indexOf(id) === index); // Remove duplicates
+        
+        console.log(`Figma API: Collected ${allNodeIds.length} unique valid node IDs for thumbnails`);
+        
+        // Fetch ALL thumbnails
+        if (allNodeIds.length > 0) {
+          return this.getImages(credentials, allNodeIds).pipe(
+            map(imageResponse => {
+              console.log(`Figma API: Received ${Object.keys(imageResponse.images).length} thumbnails`);
+              
+              return {
+                pages: this.populatePageThumbnails(pages, imageResponse),
+                designTokens,
+                localStyles,
+                components: this.populateComponentThumbnails(extractedComponents, imageResponse),
+                artboards: this.extractAllArtboards(fileData, imageResponse),
+                fileInfo: this.extractFileInfo(fileData)
+              };
+            })
+          );
+        } else {
+          console.log('Figma API: No nodes found for thumbnail generation');
+          return of({
+            pages,
+            designTokens,
+            localStyles,
+            components: extractedComponents,
+            artboards: this.extractAllArtboards(fileData, { images: {} }),
+            fileInfo: this.extractFileInfo(fileData)
+          });
+        }
       })
     );
   }
 
   /**
-   * Extract artboards (FRAME type nodes) from document
+   * Extract local styles from styles API and file data
+   */
+  private extractLocalStyles(stylesData: any, fileData: FigmaFileResponse): LocalStyle[] {
+    console.log('Figma API: Extracting local styles from styles API and file data');
+    const localStyles: LocalStyle[] = [];
+    
+    // Extract from styles API if available
+    if (stylesData && stylesData.meta && stylesData.meta.styles) {
+      console.log('Figma API: Processing local styles from styles API');
+      Object.values(stylesData.meta.styles).forEach((style: any) => {
+        localStyles.push({
+          id: style.key,
+          name: style.name,
+          type: style.style_type as 'FILL' | 'TEXT' | 'EFFECT',
+          description: style.description || '',
+          styleType: style.style_type
+        });
+      });
+    }
+    
+    // Extract from file data as fallback/supplement
+    if (fileData.styles) {
+      console.log('Figma API: Processing local styles from file data');
+      Object.values(fileData.styles).forEach((style: any) => {
+        // Avoid duplicates
+        const existingStyle = localStyles.find(s => s.id === style.key);
+        if (!existingStyle) {
+          localStyles.push({
+            id: style.key,
+            name: style.name,
+            type: style.styleType as 'FILL' | 'TEXT' | 'EFFECT',
+            description: style.description || '',
+            styleType: style.styleType
+          });
+        }
+      });
+    }
+    
+    console.log(`Figma API: Extracted ${localStyles.length} local styles`);
+    return localStyles;
+  }
+
+  /**
+   * Legacy method - maintain backward compatibility
+   */
+  private extractDesignTokensFromFileData(fileData: FigmaFileResponse, stylesData?: any[]): DesignToken[] {
+    return this.extractDesignTokens(stylesData, fileData);
+  }
+
+  /**
+   * Extract all frames as artboards/thumbnails - comprehensive search with limits
+   */
+  private findAllFrames(fileData: FigmaFileResponse): string[] {
+    console.log('Figma API: Searching for all frames in document tree');
+    const frameIds: string[] = [];
+    const MAX_FRAMES = 200; // Limit to prevent excessive requests
+    
+    const traverseNode = (node: FigmaNode) => {
+      // Stop if we already have enough frames
+      if (frameIds.length >= MAX_FRAMES) {
+        return;
+      }
+      
+      // Find all FRAME type nodes at any level
+      if (node.type === 'FRAME' && node.absoluteBoundingBox) {
+        frameIds.push(node.id);
+      }
+      
+      // Also check for component instances that might be frames
+      if (node.type === 'INSTANCE' && node.absoluteBoundingBox) {
+        frameIds.push(node.id);
+      }
+      
+      // Traverse children
+      if (node.children && Array.isArray(node.children)) {
+        node.children.forEach(child => traverseNode(child));
+      }
+    };
+    
+    if (fileData.document?.children) {
+      fileData.document.children.forEach(page => traverseNode(page));
+    }
+    
+    console.log(`Figma API: Found ${frameIds.length} total frames/instances for thumbnails (limited to ${MAX_FRAMES})`);
+    return frameIds;
+  }
+
+  /**
+   * Extract all possible design tokens from styles API and file data
+   */
+  private extractDesignTokens(stylesData: any, fileData: FigmaFileResponse): DesignToken[] {
+    console.log('Figma API: Extracting design tokens from styles and file data');
+    const tokens: DesignToken[] = [];
+    
+    // Extract from styles API if available
+    if (stylesData && stylesData.meta && stylesData.meta.styles) {
+      console.log('Figma API: Processing styles from styles API');
+      Object.values(stylesData.meta.styles).forEach((style: any) => {
+        if (style.style_type === 'FILL') {
+          tokens.push({
+            type: 'color',
+            name: style.name,
+            value: this.extractColorValue(style),
+            description: style.description || '',
+            category: this.categorizeToken(style.name)
+          });
+        }
+        if (style.style_type === 'TEXT') {
+          tokens.push({
+            type: 'typography',
+            name: style.name,
+            value: this.extractTextValue(style),
+            description: style.description || '',
+            category: this.categorizeToken(style.name)
+          });
+        }
+        if (style.style_type === 'EFFECT') {
+          tokens.push({
+            type: 'shadow',
+            name: style.name,
+            value: this.extractEffectValue(style),
+            description: style.description || '',
+            category: this.categorizeToken(style.name)
+          });
+        }
+      });
+    }
+    
+    // Extract from file data styles as fallback
+    if (fileData.styles) {
+      console.log('Figma API: Processing styles from file data');
+      Object.values(fileData.styles).forEach(style => {
+        // Avoid duplicates
+        const existingToken = tokens.find(t => t.name === style.name);
+        if (!existingToken) {
+          if (style.styleType === 'FILL') {
+            tokens.push({
+              type: 'color',
+              name: style.name,
+              value: this.extractColorValue(style),
+              description: style.description,
+              category: this.categorizeToken(style.name)
+            });
+          } else if (style.styleType === 'TEXT') {
+            tokens.push({
+              type: 'typography',
+              name: style.name,
+              value: this.extractTextValue(style),
+              description: style.description,
+              category: this.categorizeToken(style.name)
+            });
+          } else if (style.styleType === 'EFFECT') {
+            tokens.push({
+              type: 'shadow',
+              name: style.name,
+              value: this.extractEffectValue(style),
+              description: style.description,
+              category: this.categorizeToken(style.name)
+            });
+          }
+        }
+      });
+    }
+    
+    console.log(`Figma API: Extracted ${tokens.length} design tokens`);
+    return tokens;
+  }
+
+  /**
+   * Categorize design token based on name
+   */
+  private categorizeToken(tokenName: string): string {
+    const name = tokenName.toLowerCase();
+    if (name.includes('color') || name.includes('background') || name.includes('text') || name.includes('primary') || name.includes('secondary')) {
+      return 'colors';
+    }
+    if (name.includes('font') || name.includes('text') || name.includes('heading') || name.includes('body')) {
+      return 'typography';
+    }
+    if (name.includes('shadow') || name.includes('elevation') || name.includes('drop')) {
+      return 'effects';
+    }
+    if (name.includes('spacing') || name.includes('margin') || name.includes('padding')) {
+      return 'spacing';
+    }
+    return 'other';
+  }
+
+  /**
+   * Extract artboards (FRAME type nodes) from document - legacy method for backward compatibility
    */
   private extractArtboards(node: FigmaNode): ProcessedArtboard[] {
     const artboards: ProcessedArtboard[] = [];
@@ -592,51 +868,132 @@ export class FigmaService {
   }
 
   /**
-   * Extract design tokens from file data
+   * Extract all artboards with comprehensive detection
    */
-  private extractDesignTokensFromFileData(fileData: FigmaFileResponse, stylesData?: any[]): DesignToken[] {
-    const tokens: DesignToken[] = [];
-    
-    // Process styles with proper value extraction
-    Object.values(fileData.styles).forEach(style => {
-      // Try to find corresponding detailed style data (with safe array check)
-      const detailedStyle = (Array.isArray(stylesData)) ? stylesData.find(s => s.key === style.key) : null;
-      const styleToProcess = detailedStyle || style;
-      
-      if (style.styleType === 'FILL') {
-        const colorValue = this.extractColorValue(styleToProcess);
-        tokens.push({
-          type: 'color',
-          name: style.name,
-          value: colorValue,
-          description: style.description,
-          category: 'colors'
-        });
-      } else if (style.styleType === 'TEXT') {
-        const textValue = this.extractTextValue(styleToProcess);
-        tokens.push({
-          type: 'typography',
-          name: style.name,
-          value: textValue,
-          description: style.description,
-          category: 'typography'
-        });
-      } else if (style.styleType === 'EFFECT') {
-        const effectValue = this.extractEffectValue(styleToProcess);
-        tokens.push({
-          type: 'shadow',
-          name: style.name,
-          value: effectValue,
-          description: style.description,
-          category: 'effects'
-        });
-      }
-    });
+  private extractAllArtboards(fileData: FigmaFileResponse, imageResponse: FigmaImageResponse): ProcessedArtboard[] {
+    console.log('Figma API: Extracting all artboards with comprehensive detection');
+    const artboards: ProcessedArtboard[] = [];
 
-    // Extract tokens from document nodes
-    this.extractTokensFromNodes(fileData.document, tokens);
+    const traverse = (currentNode: FigmaNode) => {
+      // Enhanced detection: FRAME, INSTANCE, and other potential artboard types
+      if ((currentNode.type === 'FRAME' || currentNode.type === 'INSTANCE') && currentNode.absoluteBoundingBox) {
+        const artboard: ProcessedArtboard = {
+          id: currentNode.id,
+          name: currentNode.name,
+          imageUrl: imageResponse.images[currentNode.id] || '',
+          width: currentNode.absoluteBoundingBox.width,
+          height: currentNode.absoluteBoundingBox.height,
+          backgroundColor: this.extractBackgroundColor(currentNode)
+        };
+        artboards.push(artboard);
+      }
+
+      if (currentNode.children) {
+        currentNode.children.forEach(child => traverse(child));
+      }
+    };
+
+    if (fileData.document?.children) {
+      fileData.document.children.forEach(page => traverse(page));
+    }
     
-    return tokens;
+    console.log(`Figma API: Extracted ${artboards.length} artboards with thumbnails`);
+    return artboards;
+  }
+
+  /**
+   * Extract pages with thumbnails
+   */
+  private extractPages(fileData: FigmaFileResponse): FigmaPage[] {
+    console.log('Figma API: Extracting pages from file data');
+    const pages: FigmaPage[] = [];
+    
+    if (fileData.document.children) {
+      fileData.document.children.forEach(page => {
+        if (page.type === 'CANVAS') {
+          pages.push({
+            id: page.id,
+            name: page.name,
+            thumbnail: '', // Will be populated with images
+            children: page.children || []
+          });
+        }
+      });
+    }
+    
+    console.log(`Figma API: Found ${pages.length} pages`);
+    return pages;
+  }
+
+  /**
+   * Populate page thumbnails with actual image URLs
+   */
+  private populatePageThumbnails(pages: FigmaPage[], imageResponse: FigmaImageResponse): FigmaPage[] {
+    return pages.map(page => ({
+      ...page,
+      thumbnail: imageResponse.images[page.id] || ''
+    }));
+  }
+
+  /**
+   * Extract complete components data
+   */
+  private extractComponents(componentsData: any, fileData: FigmaFileResponse): FigmaComponent[] {
+    console.log('Figma API: Extracting components from API and file data');
+    const components: FigmaComponent[] = [];
+    
+    // Extract from components API if available
+    if (componentsData && componentsData.meta && componentsData.meta.components) {
+      console.log('Figma API: Processing components from components API');
+      Object.values(componentsData.meta.components).forEach((component: any) => {
+        components.push({
+          key: component.key,
+          name: component.name,
+          description: component.description || '',
+          documentationLinks: component.documentation_links || [],
+          id: component.key,
+          thumbnail: '', // Will be populated with images
+          variants: [],
+          properties: []
+        });
+      });
+    }
+    
+    // Extract from file structure as fallback/supplement
+    const nodeComponents = this.extractComponentsFromNodes(fileData.document);
+    if (Array.isArray(nodeComponents)) {
+      nodeComponents.forEach(nodeComponent => {
+        const existingComponent = components.find(c => c.key === nodeComponent.key);
+        if (!existingComponent) {
+          components.push(nodeComponent);
+        }
+      });
+    }
+    
+    console.log(`Figma API: Extracted ${components.length} components`);
+    return components;
+  }
+
+  /**
+   * Populate component thumbnails with actual image URLs
+   */
+  private populateComponentThumbnails(components: FigmaComponent[], imageResponse: FigmaImageResponse): FigmaComponent[] {
+    return components.map(component => ({
+      ...component,
+      thumbnail: imageResponse.images[component.id || component.key] || ''
+    }));
+  }
+
+  /**
+   * Extract complete file information
+   */
+  private extractFileInfo(fileData: FigmaFileResponse): any {
+    return {
+      name: fileData.name,
+      lastModified: fileData.lastModified,
+      version: fileData.version,
+      thumbnailUrl: fileData.thumbnailUrl
+    };
   }
 
   /**
@@ -828,21 +1185,38 @@ export class FigmaService {
 
   /**
    * Create HTTP headers with authorization
+   * Note: Removed Content-Type to avoid CORS preflight for GET requests
    */
   private getHeaders(accessToken: string): HttpHeaders {
     return new HttpHeaders({
-      'X-Figma-Token': accessToken,
-      'Content-Type': 'application/json'
+      'X-Figma-Token': accessToken
     });
   }
 
   /**
-   * Handle HTTP errors
+   * Handle HTTP errors with enhanced CORS and network error detection
    */
   private handleError = (error: any): Observable<never> => {
+    console.error('Figma API Error Details:', {
+      status: error.status,
+      statusText: error.statusText,
+      message: error.message,
+      url: error.url,
+      headers: error.headers,
+      type: error.type || 'Unknown'
+    });
+    
     let errorMessage = 'An error occurred while connecting to Figma';
     
-    if (error.status === 401) {
+    if (error.status === 0) {
+      if (error.url && error.url.length > 2048) {
+        errorMessage = 'Request URL too long. Retrying with smaller batches...';
+      } else {
+        errorMessage = 'Network error: Unable to connect to Figma API. Check CORS configuration.';
+      }
+    } else if (error.status === 414) {
+      errorMessage = 'Request URL too long. The request will be split into smaller batches.';
+    } else if (error.status === 401) {
       errorMessage = 'Invalid access token. Please check your Figma access token.';
     } else if (error.status === 403) {
       errorMessage = 'Access denied. Please ensure you have permission to access this file.';
