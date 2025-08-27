@@ -34,16 +34,11 @@ export class MCPConnectionService {
   validateConnection(credentials: MCPCredentials): Observable<boolean> {
     console.log('MCP API: Validating connection to server:', credentials.serverUrl);
     const headers = this.getHeaders(credentials);
+    const apiUrl = `${credentials.serverUrl}/health`;
     
-    return this.http.get(`${credentials.serverUrl}/health`, { headers }).pipe(
-      map(() => {
-        console.log('MCP API: Connection validation successful');
-        return true;
-      }),
-      catchError((error) => {
-        console.error('MCP API: Connection validation failed:', error);
+
         return throwError(() => ({ 
-          message: 'Failed to connect to MCP server',
+          message: 'Failed to connect to MCP server. Note: MCP may not be a real service.',
           status: error.status || 0
         }));
       })
@@ -56,16 +51,12 @@ export class MCPConnectionService {
   getFileData(credentials: MCPCredentials): Observable<MCPFileResponse> {
     console.log('MCP API: Fetching file data for project:', credentials.projectId);
     const headers = this.getHeaders(credentials);
+    const apiUrl = `${credentials.serverUrl}/projects/${credentials.projectId}/file`;
     
-    return this.http.get<MCPFileResponse>(
-      `${credentials.serverUrl}/projects/${credentials.projectId}/file`, 
-      { headers }
-    ).pipe(
-      map((response) => {
-        console.log('MCP API: Successfully fetched file data');
-        return response;
-      }),
-      catchError(this.handleError)
+    console.log('🔄 MCPService: Attempting MCP file data retrieval (Note: MCP is not a real service)');
+    console.log(`📡 API URL: ${apiUrl}`);
+    
+
     );
   }
 
@@ -80,18 +71,7 @@ export class MCPConnectionService {
     artboards: ProcessedArtboard[];
     fileInfo: { name: string; lastModified: string; version: string };
   }> {
-    console.log('MCP API: Getting enhanced analysis for project:', credentials.projectId);
-    
-    return this.getFileData(credentials).pipe(
-      map((mcpData) => {
-        console.error('MCP API: Enhanced analysis failed - functionality not implemented');
-        return this.convertMCPToFigmaFormat(mcpData);
-      }),
-      catchError((error) => {
-        console.error('MCP API: Enhanced analysis failed:', error);
-        return this.handleError(error);
-      })
-    );
+
   }
 
   /**
@@ -105,50 +85,42 @@ export class MCPConnectionService {
     artboards: ProcessedArtboard[];
     fileInfo: { name: string; lastModified: string; version: string };
   } {
-    console.error('MCP data conversion not implemented - requires actual MCP server response format specification');
-    
-    // Return proper error structure instead of placeholder data
-    throw new Error('MCP functionality not implemented - actual MCP server integration and response format parsing required');
+
   }
 
   /**
    * Extract pages from MCP data
    */
   private extractPagesFromMCP(mcpData: MCPFileResponse): FigmaPage[] {
-    // MCP format parsing implementation would need to be provided based on actual MCP server response format
-    throw new Error('MCP page extraction not implemented - requires actual MCP server response format specification');
+
   }
 
   /**
    * Extract design tokens from MCP data
    */
   private extractDesignTokensFromMCP(mcpData: MCPFileResponse): DesignToken[] {
-    // MCP format parsing implementation would need to be provided based on actual MCP server response format
-    throw new Error('MCP design token extraction not implemented - requires actual MCP server response format specification');
+
   }
 
   /**
    * Extract local styles from MCP data
    */
   private extractLocalStylesFromMCP(mcpData: MCPFileResponse): LocalStyle[] {
-    // MCP format parsing implementation would need to be provided based on actual MCP server response format
-    throw new Error('MCP local styles extraction not implemented - requires actual MCP server response format specification');
+
   }
 
   /**
    * Extract components from MCP data
    */
   private extractComponentsFromMCP(mcpData: MCPFileResponse): FigmaComponent[] {
-    // MCP format parsing implementation would need to be provided based on actual MCP server response format
-    throw new Error('MCP components extraction not implemented - requires actual MCP server response format specification');
+
   }
 
   /**
    * Extract artboards from MCP data
    */
   private extractArtboardsFromMCP(mcpData: MCPFileResponse): ProcessedArtboard[] {
-    // MCP format parsing implementation would need to be provided based on actual MCP server response format
-    throw new Error('MCP artboards extraction not implemented - requires actual MCP server response format specification');
+
   }
 
   /**

@@ -43,16 +43,9 @@ export class FigmaService {
   getFileData(credentials: FigmaCredentials): Observable<FigmaFileResponse> {
     console.log('Figma API: Fetching file data for file ID:', credentials.fileId);
     const headers = this.getHeaders(credentials.accessToken);
+    const apiUrl = `${this.FIGMA_API_BASE}/files/${credentials.fileId}`;
     
-    return this.http.get<FigmaFileResponse>(
-      `${this.FIGMA_API_BASE}/files/${credentials.fileId}`,
-      { headers }
-    ).pipe(
-      map((response) => {
-        console.log('Figma API: Successfully fetched file data:', response.name);
-        return response;
-      }),
-      catchError(this.handleError)
+
     );
   }
 
@@ -62,18 +55,9 @@ export class FigmaService {
   getFileStyles(credentials: FigmaCredentials): Observable<any> {
     console.log('Figma API: Fetching styles from styles endpoint for file ID:', credentials.fileId);
     const headers = this.getHeaders(credentials.accessToken);
+    const apiUrl = `${this.FIGMA_API_BASE}/files/${credentials.fileId}/styles`;
     
-    return this.http.get<any>(
-      `${this.FIGMA_API_BASE}/files/${credentials.fileId}/styles`,
-      { headers }
-    ).pipe(
-      map((response) => {
-        console.log('Figma API: Successfully fetched styles data from styles endpoint');
-        return response;
-      }),
-      catchError((error) => {
-        console.warn('Figma API: Styles endpoint failed, falling back to file parsing:', error);
-        return of(null);
+
       })
     );
   }
@@ -84,18 +68,7 @@ export class FigmaService {
   getFileComponents(credentials: FigmaCredentials): Observable<any> {
     console.log('Figma API: Fetching components from components endpoint for file ID:', credentials.fileId);
     const headers = this.getHeaders(credentials.accessToken);
-    
-    return this.http.get<any>(
-      `${this.FIGMA_API_BASE}/files/${credentials.fileId}/components`,
-      { headers }
-    ).pipe(
-      map((response) => {
-        console.log('Figma API: Successfully fetched components data from components endpoint');
-        return response;
-      }),
-      catchError((error) => {
-        console.warn('Figma API: Components endpoint failed, falling back to file parsing:', error);
-        return of(null);
+
       })
     );
   }
@@ -298,20 +271,15 @@ export class FigmaService {
    * Fetch pages from Figma file
    */
   fetchPages(credentials: FigmaCredentials): Observable<FigmaPage[]> {
-    console.log('Figma API: Fetching pages from file:', credentials.fileId);
-    
-    return this.getFileData(credentials).pipe(
-      switchMap((fileData: FigmaFileResponse) => {
-        const pages: FigmaPage[] = [];
-        const pageIds: string[] = [];
+
         
         if (fileData.document.children) {
           fileData.document.children.forEach(page => {
             if (page.type === 'CANVAS') {
-              pages.push({
+              pagesData.push({
                 id: page.id,
                 name: page.name,
-                thumbnail: '', // TEMPORARY - will be replaced immediately
+
                 children: page.children || []
               });
               pageIds.push(page.id);
@@ -319,22 +287,12 @@ export class FigmaService {
           });
         }
         
-        console.log(`Figma API: Found ${pages.length} pages, fetching thumbnails for page IDs:`, pageIds);
-        
-        // REAL API CALL for thumbnails
-        if (pageIds.length > 0) {
-          return this.getImages(credentials, pageIds).pipe(
-            map((imageResponse: FigmaImageResponse) => {
-              console.log('Figma API: Received page thumbnails:', Object.keys(imageResponse.images));
-              return pages.map(page => ({
-                ...page,
-                thumbnail: imageResponse.images[page.id] || ''
+
               }));
             })
           );
         } else {
-          console.log('Figma API: No pages found to fetch thumbnails for');
-          return of(pages);
+
         }
       })
     );
@@ -344,27 +302,26 @@ export class FigmaService {
    * Fetch artboards for a specific page
    */
   fetchPageArtboards(pageId: string, credentials: FigmaCredentials): Observable<Artboard[]> {
-    console.log('Figma API: Fetching artboards for page ID:', pageId);
-    
+
     return this.getFileData(credentials).pipe(
       switchMap((fileData: FigmaFileResponse) => {
         const page = this.findPageById(fileData.document, pageId);
         
         if (!page || !page.children) {
-          console.error('Figma API: Page not found or has no children:', pageId);
-          return of([]); // Return empty array instead of error
+
         }
 
-        const artboards: Artboard[] = [];
+        console.log(`✅ FigmaService: Found page ${pageId}, extracting artboards...`);
+        const nodeIds: string[] = [];
+        const artboardsData: { id: string; name: string; type: "FRAME"; absoluteBoundingBox: any }[] = [];
         
         // Extract artboards (FRAME type nodes) from the page
         page.children.forEach(child => {
           if (child.type === 'FRAME' && child.absoluteBoundingBox) {
-            artboards.push({
+            artboardsData.push({
               id: child.id,
               name: child.name,
-              type: 'FRAME',
-              thumbnail: '', // Will be populated with image API
+              type: 'FRAME' as const,
               absoluteBoundingBox: {
                 x: child.absoluteBoundingBox.x,
                 y: child.absoluteBoundingBox.y,
@@ -372,26 +329,16 @@ export class FigmaService {
                 height: child.absoluteBoundingBox.height
               }
             });
+            nodeIds.push(child.id);
           }
         });
 
-        console.log(`Figma API: Found ${artboards.length} artboards in page, fetching thumbnails`);
-        
-        // Get thumbnails for the artboards
-        if (artboards.length > 0) {
-          const nodeIds = artboards.map(artboard => artboard.id);
-          return this.getImages(credentials, nodeIds).pipe(
-            map((imageResponse: FigmaImageResponse) => {
-              console.log('Figma API: Received artboard thumbnails for page');
-              return artboards.map(artboard => ({
-                ...artboard,
-                thumbnail: imageResponse.images[artboard.id] || ''
+
               }));
             })
           );
         } else {
-          console.log('Figma API: No artboards found in page');
-          return of(artboards);
+
         }
       }),
       catchError(error => {
@@ -453,16 +400,20 @@ export class FigmaService {
    * Fetch components from Figma file
    */
   fetchComponents(credentials: FigmaCredentials): Observable<FigmaComponent[]> {
+    console.log('🔄 FigmaService: Starting fetchComponents API call...');
     return forkJoin({
       fileData: this.getFileData(credentials),
       componentsApi: this.getComponentsFromAPI(credentials)
     }).pipe(
-      map(({ fileData, componentsApi }) => {
-        const components: FigmaComponent[] = [];
+      switchMap(({ fileData, componentsApi }) => {
+        console.log('✅ FigmaService: Component data received, processing...');
+        const allComponents: FigmaComponent[] = [];
+        const componentIds: string[] = [];
         
         // First, add components from the dedicated API endpoint (with null check)
         if (Array.isArray(componentsApi)) {
-          components.push(...componentsApi);
+          allComponents.push(...componentsApi);
+          componentIds.push(...componentsApi.filter(c => c.id).map(c => c.id!));
         }
         
         // Then, parse the file structure to find additional components
@@ -471,17 +422,35 @@ export class FigmaService {
         // Merge components, avoiding duplicates (with null check)
         if (Array.isArray(nodeComponents)) {
           nodeComponents.forEach(nodeComponent => {
-            const existingComponent = components.find(c => c.key === nodeComponent.key);
+            const existingComponent = allComponents.find(c => c.key === nodeComponent.key);
             if (!existingComponent) {
-              components.push(nodeComponent);
+              allComponents.push(nodeComponent);
+              if (nodeComponent.id) {
+                componentIds.push(nodeComponent.id);
+              }
             }
           });
         }
         
-        return components;
+        // REAL API CALL for component thumbnails - no placeholder values
+        if (componentIds.length > 0) {
+          console.log(`🔄 FigmaService: Making images API call for ${componentIds.length} components...`, componentIds);
+          return this.getImages(credentials, componentIds).pipe(
+            map((imageResponse: FigmaImageResponse) => {
+              console.log('✅ FigmaService: Component thumbnails received from API', imageResponse);
+              return allComponents.map(component => ({
+                ...component,
+                thumbnail: component.id ? (imageResponse.images[component.id] || '') : ''
+              }));
+            })
+          );
+        } else {
+          console.log('⚠️ FigmaService: No components found');
+          return [allComponents];
+        }
       }),
       catchError((error) => {
-        console.error('Error fetching components:', error);
+        console.error('❌ FigmaService: Error fetching components:', error);
         return this.handleError(error);
       })
     );
@@ -492,12 +461,14 @@ export class FigmaService {
    */
   private getComponentsFromAPI(credentials: FigmaCredentials): Observable<FigmaComponent[]> {
     const headers = this.getHeaders(credentials.accessToken);
+    console.log('🔄 FigmaService: Calling Figma components API endpoint...');
     
     return this.http.get<any>(
       `${this.FIGMA_API_BASE}/files/${credentials.fileId}/components`,
       { headers }
     ).pipe(
       map((componentsResponse: any) => {
+        console.log('✅ FigmaService: Components API response received', componentsResponse);
         const components: FigmaComponent[] = [];
         
         if (componentsResponse.meta && componentsResponse.meta.components) {
@@ -508,7 +479,7 @@ export class FigmaService {
               description: component.description || '',
               documentationLinks: component.documentation_links || [],
               id: component.key,
-              thumbnail: '', // Will be populated with image API
+              thumbnail: '', // Will be populated by fetchComponents method with actual API call
               variants: [],
               properties: []
             });
@@ -518,7 +489,7 @@ export class FigmaService {
         return components;
       }),
       catchError((error) => {
-        console.error('Figma API: Components endpoint failed:', error);
+
         // If the components API fails, return empty array
         // We'll still get components from file parsing
         return of([]);
@@ -546,7 +517,7 @@ export class FigmaService {
           description: '', // Node description not typically available in file API
           documentationLinks: [],
           id: currentNode.id,
-          thumbnail: '', // Will be populated with image API
+          thumbnail: '', // Will be populated by fetchComponents method with actual API call
           variants: currentNode.type === 'COMPONENT_SET' ? [] : undefined,
           properties: []
         });
