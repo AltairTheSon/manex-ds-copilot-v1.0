@@ -52,8 +52,8 @@ describe('FigmaService - Image Batching', () => {
     expect(secondBatchIds.length).toBe(25);
 
     // Mock responses
-    const mockResponse1 = { images: {} };
-    const mockResponse2 = { images: {} };
+    const mockResponse1 = { images: {} as { [key: string]: string } };
+    const mockResponse2 = { images: {} as { [key: string]: string } };
     
     // Add mock images for each batch
     firstBatchIds.forEach(id => mockResponse1.images[id] = `http://test.com/${id}.png`);
@@ -99,7 +99,7 @@ describe('FigmaService - Image Batching', () => {
 
     // First batch succeeds
     const firstBatchIds = req1.request.url.split('ids=')[1].split('&')[0].split(',');
-    const mockResponse1 = { images: {} };
+    const mockResponse1 = { images: {} as { [key: string]: string } };
     firstBatchIds.forEach(id => mockResponse1.images[id] = `http://test.com/${id}.png`);
     req1.flush(mockResponse1);
 
