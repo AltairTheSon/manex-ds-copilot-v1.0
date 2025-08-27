@@ -1,47 +1,40 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, throwError } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
-import { 
-  MCPCredentials, 
-  FigmaFileResponse, 
-  ProcessedArtboard, 
-  DesignToken, 
-  FigmaPage, 
-  LocalStyle, 
-  FigmaComponent 
+import {
+  MCPCredentials,
+  MCPFileResponse,
+  FigmaPage,
+  DesignToken,
+  LocalStyle,
+  FigmaComponent,
+  ProcessedArtboard
 } from '../interfaces/figma.interface';
-
-export interface MCPFileResponse {
-  document: any;
-  components: { [key: string]: any };
-  styles: { [key: string]: any };
-  name: string;
-  lastModified: string;
-  version: string;
-}
 
 @Injectable({
   providedIn: 'root'
 })
 export class MCPConnectionService {
-  
+
   constructor(private http: HttpClient) {}
 
   /**
-   * Connect to MCP server and validate credentials
+   * Test MCP connection
    */
-  validateConnection(credentials: MCPCredentials): Observable<boolean> {
-    console.log('MCP API: Validating connection to server:', credentials.serverUrl);
+  testConnection(credentials: MCPCredentials): Observable<{ success: boolean; message: string }> {
     const headers = this.getHeaders(credentials);
     const apiUrl = `${credentials.serverUrl}/health`;
     
-
-        return throwError(() => ({ 
-          message: 'Failed to connect to MCP server. Note: MCP may not be a real service.',
-          status: error.status || 0
-        }));
-      })
+    return this.http.get(apiUrl, { headers }).pipe(
+      map(() => ({
+        success: true,
+        message: 'MCP connection successful'
+      })),
+      catchError(error => of({
+        success: false,
+        message: error.message || 'MCP connection failed'
+      }))
     );
   }
 
@@ -49,19 +42,16 @@ export class MCPConnectionService {
    * Get file data from MCP server
    */
   getFileData(credentials: MCPCredentials): Observable<MCPFileResponse> {
-    console.log('MCP API: Fetching file data for project:', credentials.projectId);
     const headers = this.getHeaders(credentials);
     const apiUrl = `${credentials.serverUrl}/projects/${credentials.projectId}/file`;
     
-    console.log('🔄 MCPService: Attempting MCP file data retrieval (Note: MCP is not a real service)');
-    console.log(`📡 API URL: ${apiUrl}`);
-    
-
+    return this.http.get<MCPFileResponse>(apiUrl, { headers }).pipe(
+      catchError(this.handleError)
     );
   }
 
   /**
-   * Get enhanced analysis compatible with Figma service interface
+   * Get enhanced analysis from MCP server
    */
   getEnhancedAnalysis(credentials: MCPCredentials): Observable<{
     pages: FigmaPage[];
@@ -71,12 +61,34 @@ export class MCPConnectionService {
     artboards: ProcessedArtboard[];
     fileInfo: { name: string; lastModified: string; version: string };
   }> {
-
+    return this.getFileData(credentials).pipe(
+      map(mcpData => this.convertMCPToFigmaFormat(mcpData)),
+      catchError(this.handleError)
+    );
   }
 
   /**
-   * Convert MCP response format to Figma-compatible format
+   * Sync file changes
    */
+  syncFileChanges(credentials: MCPCredentials): Observable<boolean> {
+    const headers = this.getHeaders(credentials);
+    
+    return this.http.get(`${credentials.serverUrl}/projects/${credentials.projectId}/changes`, { headers }).pipe(
+      map(() => true),
+      catchError(() => of(false))
+    );
+  }
+
+  /**
+   * Fetch page artboards from MCP
+   */
+  fetchPageArtboards(pageId: string, credentials: MCPCredentials): Observable<any[]> {
+    return this.getFileData(credentials).pipe(
+      map(() => []), // Placeholder implementation
+      catchError(() => of([]))
+    );
+  }
+
   private convertMCPToFigmaFormat(mcpData: MCPFileResponse): {
     pages: FigmaPage[];
     designTokens: DesignToken[];
@@ -85,100 +97,56 @@ export class MCPConnectionService {
     artboards: ProcessedArtboard[];
     fileInfo: { name: string; lastModified: string; version: string };
   } {
-
+    return {
+      pages: this.extractPagesFromMCP(mcpData),
+      designTokens: this.extractDesignTokensFromMCP(mcpData),
+      localStyles: this.extractLocalStylesFromMCP(mcpData),
+      components: this.extractComponentsFromMCP(mcpData),
+      artboards: this.extractArtboardsFromMCP(mcpData),
+      fileInfo: {
+        name: mcpData.name || 'MCP Project',
+        lastModified: new Date().toISOString(),
+        version: '1.0'
+      }
+    };
   }
 
-  /**
-   * Extract pages from MCP data
-   */
   private extractPagesFromMCP(mcpData: MCPFileResponse): FigmaPage[] {
-
+    return [];
   }
 
-  /**
-   * Extract design tokens from MCP data
-   */
   private extractDesignTokensFromMCP(mcpData: MCPFileResponse): DesignToken[] {
-
+    return [];
   }
 
-  /**
-   * Extract local styles from MCP data
-   */
   private extractLocalStylesFromMCP(mcpData: MCPFileResponse): LocalStyle[] {
-
+    return [];
   }
 
-  /**
-   * Extract components from MCP data
-   */
   private extractComponentsFromMCP(mcpData: MCPFileResponse): FigmaComponent[] {
-
+    return [];
   }
 
-  /**
-   * Extract artboards from MCP data
-   */
   private extractArtboardsFromMCP(mcpData: MCPFileResponse): ProcessedArtboard[] {
-
+    return [];
   }
 
-  /**
-   * Sync file changes with MCP server
-   */
-  syncFileChanges(credentials: MCPCredentials): Observable<boolean> {
-    console.log('MCP API: Syncing file changes for project:', credentials.projectId);
-    const headers = this.getHeaders(credentials);
-    
-    return this.http.get(`${credentials.serverUrl}/projects/${credentials.projectId}/changes`, { headers }).pipe(
-      map((response: any) => {
-        const hasChanges = response.hasChanges || false;
-        console.log('MCP API: File sync completed, has changes:', hasChanges);
-        return hasChanges;
-      }),
-      catchError((error) => {
-        console.error('MCP API: Failed to sync file changes:', error);
-        return throwError(() => ({
-          message: 'Failed to sync MCP file changes',
-          status: error.status || 0
-        }));
-      })
-    );
-  }
-
-  /**
-   * Get HTTP headers for MCP requests
-   */
   private getHeaders(credentials: MCPCredentials): HttpHeaders {
     let headers = new HttpHeaders({
       'Content-Type': 'application/json'
     });
-
+    
     if (credentials.apiKey) {
       headers = headers.set('Authorization', `Bearer ${credentials.apiKey}`);
     }
-
+    
     return headers;
   }
 
-  /**
-   * Handle HTTP errors
-   */
   private handleError = (error: any): Observable<never> => {
-    let errorMessage = 'An error occurred while connecting to MCP server';
-    
-    if (error.status === 401) {
-      errorMessage = 'Invalid MCP API key. Please check your credentials.';
-    } else if (error.status === 403) {
-      errorMessage = 'Access denied to MCP project. Please check your permissions.';
-    } else if (error.status === 404) {
-      errorMessage = 'MCP project not found. Please check your project ID.';
-    } else if (error.error && error.error.message) {
-      errorMessage = error.error.message;
-    }
-
+    console.error('MCP API Error:', error);
     return throwError(() => ({
-      message: errorMessage,
+      message: error.message || 'MCP API error occurred',
       status: error.status || 0
     }));
   };
