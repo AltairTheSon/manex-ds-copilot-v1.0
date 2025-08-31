@@ -36,7 +36,9 @@ export class MCPConnectionService {
     const headers = this.getHeaders(credentials);
     const apiUrl = `${credentials.serverUrl}/health`;
     
-
+    return this.http.get(apiUrl, { headers }).pipe(
+      map(() => true),
+      catchError((error) => {
         return throwError(() => ({ 
           message: 'Failed to connect to MCP server. Note: MCP may not be a real service.',
           status: error.status || 0
@@ -56,7 +58,8 @@ export class MCPConnectionService {
     console.log('🔄 MCPService: Attempting MCP file data retrieval (Note: MCP is not a real service)');
     console.log(`📡 API URL: ${apiUrl}`);
     
-
+    return this.http.get<MCPFileResponse>(apiUrl, { headers }).pipe(
+      catchError(this.handleError)
     );
   }
 
@@ -71,7 +74,12 @@ export class MCPConnectionService {
     artboards: ProcessedArtboard[];
     fileInfo: { name: string; lastModified: string; version: string };
   }> {
-
+    return this.getFileData(credentials).pipe(
+      map((mcpData: MCPFileResponse) => {
+        return this.convertMCPToFigmaFormat(mcpData);
+      }),
+      catchError(this.handleError)
+    );
   }
 
   /**
@@ -85,42 +93,146 @@ export class MCPConnectionService {
     artboards: ProcessedArtboard[];
     fileInfo: { name: string; lastModified: string; version: string };
   } {
-
+    return {
+      pages: this.extractPagesFromMCP(mcpData),
+      designTokens: this.extractDesignTokensFromMCP(mcpData),
+      localStyles: this.extractLocalStylesFromMCP(mcpData),
+      components: this.extractComponentsFromMCP(mcpData),
+      artboards: this.extractArtboardsFromMCP(mcpData),
+      fileInfo: {
+        name: mcpData.name,
+        lastModified: mcpData.lastModified,
+        version: mcpData.version
+      }
+    };
   }
 
   /**
    * Extract pages from MCP data
    */
   private extractPagesFromMCP(mcpData: MCPFileResponse): FigmaPage[] {
-
+    const pages: FigmaPage[] = [];
+    
+    if (mcpData.document && mcpData.document.children) {
+      mcpData.document.children.forEach((page: any) => {
+        if (page.type === 'CANVAS') {
+          pages.push({
+            id: page.id,
+            name: page.name,
+            thumbnail: '',
+            children: page.children || []
+          });
+        }
+      });
+    }
+    
+    return pages;
   }
 
   /**
    * Extract design tokens from MCP data
    */
   private extractDesignTokensFromMCP(mcpData: MCPFileResponse): DesignToken[] {
-
+    const tokens: DesignToken[] = [];
+    
+    if (mcpData.styles) {
+      Object.values(mcpData.styles).forEach((style: any) => {
+        if (style.styleType === 'FILL') {
+          tokens.push({
+            type: 'color',
+            name: style.name,
+            value: style.value || '#000000',
+            description: style.description || '',
+            category: 'colors'
+          });
+        } else if (style.styleType === 'TEXT') {
+          tokens.push({
+            type: 'typography',
+            name: style.name,
+            value: style.value || 'font-family: Arial; font-size: 16px;',
+            description: style.description || '',
+            category: 'typography'
+          });
+        }
+      });
+    }
+    
+    return tokens;
   }
 
   /**
    * Extract local styles from MCP data
    */
   private extractLocalStylesFromMCP(mcpData: MCPFileResponse): LocalStyle[] {
-
+    const styles: LocalStyle[] = [];
+    
+    if (mcpData.styles) {
+      Object.values(mcpData.styles).forEach((style: any) => {
+        styles.push({
+          id: style.id || style.key,
+          name: style.name,
+          type: style.styleType as 'FILL' | 'TEXT' | 'EFFECT',
+          description: style.description || '',
+          styleType: style.styleType
+        });
+      });
+    }
+    
+    return styles;
   }
 
   /**
    * Extract components from MCP data
    */
   private extractComponentsFromMCP(mcpData: MCPFileResponse): FigmaComponent[] {
-
+    const components: FigmaComponent[] = [];
+    
+    if (mcpData.components) {
+      Object.values(mcpData.components).forEach((component: any) => {
+        components.push({
+          key: component.key || component.id,
+          name: component.name,
+          description: component.description || '',
+          documentationLinks: component.documentationLinks || [],
+          id: component.id || component.key,
+          thumbnail: component.thumbnail || '',
+          variants: component.variants || [],
+          properties: component.properties || []
+        });
+      });
+    }
+    
+    return components;
   }
 
   /**
    * Extract artboards from MCP data
    */
   private extractArtboardsFromMCP(mcpData: MCPFileResponse): ProcessedArtboard[] {
-
+    const artboards: ProcessedArtboard[] = [];
+    
+    if (mcpData.document && mcpData.document.children) {
+      const traverse = (node: any) => {
+        if (node.type === 'FRAME' && node.absoluteBoundingBox) {
+          artboards.push({
+            id: node.id,
+            name: node.name,
+            imageUrl: node.thumbnail || '',
+            width: node.absoluteBoundingBox.width,
+            height: node.absoluteBoundingBox.height,
+            backgroundColor: node.backgroundColor
+          });
+        }
+        
+        if (node.children) {
+          node.children.forEach(traverse);
+        }
+      };
+      
+      mcpData.document.children.forEach(traverse);
+    }
+    
+    return artboards;
   }
 
   /**

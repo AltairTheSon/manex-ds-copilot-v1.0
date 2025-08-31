@@ -45,7 +45,8 @@ export class FigmaService {
     const headers = this.getHeaders(credentials.accessToken);
     const apiUrl = `${this.FIGMA_API_BASE}/files/${credentials.fileId}`;
     
-
+    return this.http.get<FigmaFileResponse>(apiUrl, { headers }).pipe(
+      catchError(this.handleError)
     );
   }
 
@@ -57,8 +58,8 @@ export class FigmaService {
     const headers = this.getHeaders(credentials.accessToken);
     const apiUrl = `${this.FIGMA_API_BASE}/files/${credentials.fileId}/styles`;
     
-
-      })
+    return this.http.get<any>(apiUrl, { headers }).pipe(
+      catchError(this.handleError)
     );
   }
 
@@ -68,8 +69,10 @@ export class FigmaService {
   getFileComponents(credentials: FigmaCredentials): Observable<any> {
     console.log('Figma API: Fetching components from components endpoint for file ID:', credentials.fileId);
     const headers = this.getHeaders(credentials.accessToken);
-
-      })
+    const apiUrl = `${this.FIGMA_API_BASE}/files/${credentials.fileId}/components`;
+    
+    return this.http.get<any>(apiUrl, { headers }).pipe(
+      catchError(this.handleError)
     );
   }
 
