@@ -45,7 +45,8 @@ export class FigmaService {
     const headers = this.getHeaders(credentials.accessToken);
     const apiUrl = `${this.FIGMA_API_BASE}/files/${credentials.fileId}`;
     
-
+    return this.http.get<FigmaFileResponse>(apiUrl, { headers }).pipe(
+      catchError(this.handleError)
     );
   }
 
@@ -57,8 +58,8 @@ export class FigmaService {
     const headers = this.getHeaders(credentials.accessToken);
     const apiUrl = `${this.FIGMA_API_BASE}/files/${credentials.fileId}/styles`;
     
-
-      })
+    return this.http.get<any>(apiUrl, { headers }).pipe(
+      catchError(this.handleError)
     );
   }
 
@@ -68,8 +69,10 @@ export class FigmaService {
   getFileComponents(credentials: FigmaCredentials): Observable<any> {
     console.log('Figma API: Fetching components from components endpoint for file ID:', credentials.fileId);
     const headers = this.getHeaders(credentials.accessToken);
-
-      })
+    const apiUrl = `${this.FIGMA_API_BASE}/files/${credentials.fileId}/components`;
+    
+    return this.http.get<any>(apiUrl, { headers }).pipe(
+      catchError(this.handleError)
     );
   }
 
@@ -271,7 +274,9 @@ export class FigmaService {
    * Fetch pages from Figma file
    */
   fetchPages(credentials: FigmaCredentials): Observable<FigmaPage[]> {
-
+    return this.getFileData(credentials).pipe(
+      map((fileData: FigmaFileResponse) => {
+        const pagesData: FigmaPage[] = [];
         
         if (fileData.document.children) {
           fileData.document.children.forEach(page => {
@@ -279,22 +284,16 @@ export class FigmaService {
               pagesData.push({
                 id: page.id,
                 name: page.name,
-
+                thumbnail: '',
                 children: page.children || []
               });
-              pageIds.push(page.id);
             }
           });
         }
         
-
-              }));
-            })
-          );
-        } else {
-
-        }
-      })
+        return pagesData;
+      }),
+      catchError(this.handleError)
     );
   }
 
@@ -302,18 +301,17 @@ export class FigmaService {
    * Fetch artboards for a specific page
    */
   fetchPageArtboards(pageId: string, credentials: FigmaCredentials): Observable<Artboard[]> {
-
     return this.getFileData(credentials).pipe(
       switchMap((fileData: FigmaFileResponse) => {
         const page = this.findPageById(fileData.document, pageId);
         
         if (!page || !page.children) {
-
+          return of([]);
         }
 
         console.log(`✅ FigmaService: Found page ${pageId}, extracting artboards...`);
         const nodeIds: string[] = [];
-        const artboardsData: { id: string; name: string; type: "FRAME"; absoluteBoundingBox: any }[] = [];
+        const artboardsData: Artboard[] = [];
         
         // Extract artboards (FRAME type nodes) from the page
         page.children.forEach(child => {
@@ -322,6 +320,7 @@ export class FigmaService {
               id: child.id,
               name: child.name,
               type: 'FRAME' as const,
+              thumbnail: '', // Will be populated below
               absoluteBoundingBox: {
                 x: child.absoluteBoundingBox.x,
                 y: child.absoluteBoundingBox.y,
@@ -333,12 +332,18 @@ export class FigmaService {
           }
         });
 
-
+        // Get thumbnails and return artboards
+        if (nodeIds.length > 0) {
+          return this.getImages(credentials, nodeIds).pipe(
+            map((imageResponse: FigmaImageResponse) => {
+              return artboardsData.map(artboard => ({
+                ...artboard,
+                thumbnail: imageResponse.images[artboard.id] || ''
               }));
             })
           );
         } else {
-
+          return of(artboardsData);
         }
       }),
       catchError(error => {
