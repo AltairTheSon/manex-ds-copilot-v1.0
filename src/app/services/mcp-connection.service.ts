@@ -27,14 +27,7 @@ export class MCPConnectionService {
     const apiUrl = `${credentials.serverUrl}/health`;
     
     return this.http.get(apiUrl, { headers }).pipe(
-      map(() => ({
-        success: true,
-        message: 'MCP connection successful'
-      })),
-      catchError(error => of({
-        success: false,
-        message: error.message || 'MCP connection failed'
-      }))
+
     );
   }
 
@@ -45,6 +38,7 @@ export class MCPConnectionService {
     const headers = this.getHeaders(credentials);
     const apiUrl = `${credentials.serverUrl}/projects/${credentials.projectId}/file`;
     
+
     return this.http.get<MCPFileResponse>(apiUrl, { headers }).pipe(
       catchError(this.handleError)
     );
@@ -62,21 +56,7 @@ export class MCPConnectionService {
     fileInfo: { name: string; lastModified: string; version: string };
   }> {
     return this.getFileData(credentials).pipe(
-      map(mcpData => this.convertMCPToFigmaFormat(mcpData)),
-      catchError(this.handleError)
-    );
-  }
 
-  /**
-   * Sync file changes
-   */
-  syncFileChanges(credentials: MCPCredentials): Observable<boolean> {
-    const headers = this.getHeaders(credentials);
-    
-    return this.http.get(`${credentials.serverUrl}/projects/${credentials.projectId}/changes`, { headers }).pipe(
-      map(() => true),
-      catchError(() => of(false))
-    );
   }
 
   /**
@@ -104,31 +84,29 @@ export class MCPConnectionService {
       components: this.extractComponentsFromMCP(mcpData),
       artboards: this.extractArtboardsFromMCP(mcpData),
       fileInfo: {
-        name: mcpData.name || 'MCP Project',
-        lastModified: new Date().toISOString(),
-        version: '1.0'
+
       }
     };
   }
 
   private extractPagesFromMCP(mcpData: MCPFileResponse): FigmaPage[] {
-    return [];
+
   }
 
   private extractDesignTokensFromMCP(mcpData: MCPFileResponse): DesignToken[] {
-    return [];
+
   }
 
   private extractLocalStylesFromMCP(mcpData: MCPFileResponse): LocalStyle[] {
-    return [];
+
   }
 
   private extractComponentsFromMCP(mcpData: MCPFileResponse): FigmaComponent[] {
-    return [];
+
   }
 
   private extractArtboardsFromMCP(mcpData: MCPFileResponse): ProcessedArtboard[] {
-    return [];
+
   }
 
   private getHeaders(credentials: MCPCredentials): HttpHeaders {

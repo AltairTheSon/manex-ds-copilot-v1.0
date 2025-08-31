@@ -32,7 +32,6 @@ export class FigmaService {
     const headers = this.getHeaders(credentials.accessToken);
     const url = `${this.FIGMA_API_BASE}/files/${credentials.fileId}`;
     
-    return this.http.get<FigmaFileResponse>(url, { headers }).pipe(
       catchError(this.handleError)
     );
   }
@@ -44,7 +43,7 @@ export class FigmaService {
     const headers = this.getHeaders(credentials.accessToken);
     const url = `${this.FIGMA_API_BASE}/files/${credentials.fileId}/styles`;
     
-    return this.http.get<any>(url, { headers }).pipe(
+
       catchError(this.handleError)
     );
   }
@@ -54,7 +53,7 @@ export class FigmaService {
    */
   getFileComponents(credentials: FigmaCredentials): Observable<any> {
     const headers = this.getHeaders(credentials.accessToken);
-    const url = `${this.FIGMA_API_BASE}/files/${credentials.fileId}/components`;
+
     
     return this.http.get<any>(url, { headers }).pipe(
       catchError(this.handleError)
@@ -90,39 +89,7 @@ export class FigmaService {
       stylesData: this.getFileStyles(credentials),
       componentsData: this.getFileComponents(credentials)
     }).pipe(
-      switchMap(({ fileData, stylesData, componentsData }) => {
-        const pages = this.extractPages(fileData);
-        const designTokens = this.extractDesignTokens(stylesData, fileData);
-        const localStyles = this.extractLocalStyles(stylesData, fileData);
-        const extractedComponents = this.extractComponents(componentsData, fileData);
-        
-        const allNodeIds = [
-          ...pages.map(p => p.id),
-          ...extractedComponents.map(c => c.id || c.key),
-          ...this.findAllFrames(fileData)
-        ].filter(id => id && id.trim());
-        
-        if (allNodeIds.length > 0) {
-          return this.getImages(credentials, allNodeIds).pipe(
-            map(imageResponse => ({
-              pages: this.populatePageThumbnails(pages, imageResponse),
-              designTokens,
-              localStyles,
-              components: this.populateComponentThumbnails(extractedComponents, imageResponse),
-              artboards: this.extractAllArtboards(fileData, imageResponse),
-              fileInfo: this.extractFileInfo(fileData)
-            }))
-          );
-        } else {
-          return of({
-            pages,
-            designTokens,
-            localStyles,
-            components: extractedComponents,
-            artboards: this.extractAllArtboards(fileData, { images: {} }),
-            fileInfo: this.extractFileInfo(fileData)
-          });
-        }
+
       }),
       catchError(this.handleError)
     );
@@ -140,15 +107,14 @@ export class FigmaService {
           return of([]);
         }
 
-        const frames: Artboard[] = [];
+
         
         page.children.forEach(child => {
           if (child.type === 'FRAME' && child.absoluteBoundingBox) {
             frames.push({
               id: child.id,
               name: child.name,
-              type: 'FRAME',
-              thumbnail: '',
+
               absoluteBoundingBox: {
                 x: child.absoluteBoundingBox.x,
                 y: child.absoluteBoundingBox.y,
@@ -159,19 +125,13 @@ export class FigmaService {
           }
         });
 
-        if (frames.length > 0) {
-          const nodeIds = frames.map(frame => frame.id);
-          return this.getImages(credentials, nodeIds).pipe(
-            map((imageResponse: FigmaImageResponse) => {
-              return frames.map(frame => ({
-                ...frame,
-                thumbnail: imageResponse.images[frame.id] || ''
+
               }));
             }),
             catchError(() => of(frames))
           );
         } else {
-          return of([]);
+
         }
       }),
       catchError(() => of([]))
