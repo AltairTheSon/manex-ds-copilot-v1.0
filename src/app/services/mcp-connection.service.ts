@@ -4,21 +4,13 @@ import { Observable, of, throwError } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import {
   MCPCredentials,
+
   FigmaPage,
   DesignToken,
   LocalStyle,
   FigmaComponent,
   ProcessedArtboard
 } from '../interfaces/figma.interface';
-
-export interface MCPFileResponse {
-  document: any;
-  components: { [key: string]: any };
-  styles: { [key: string]: any };
-  name: string;
-  lastModified: string;
-  version: string;
-}
 
 @Injectable({
   providedIn: 'root'
@@ -35,14 +27,7 @@ export class MCPConnectionService {
     const apiUrl = `${credentials.serverUrl}/health`;
     
     return this.http.get(apiUrl, { headers }).pipe(
-      map(() => ({
-        success: true,
-        message: 'MCP connection successful'
-      })),
-      catchError(error => of({
-        success: false,
-        message: error.message || 'MCP connection failed'
-      }))
+
     );
   }
 
@@ -53,6 +38,7 @@ export class MCPConnectionService {
     const headers = this.getHeaders(credentials);
     const apiUrl = `${credentials.serverUrl}/projects/${credentials.projectId}/file`;
     
+
     return this.http.get<MCPFileResponse>(apiUrl, { headers }).pipe(
       catchError(this.handleError)
     );
@@ -70,10 +56,7 @@ export class MCPConnectionService {
     fileInfo: { name: string; lastModified: string; version: string };
   }> {
     return this.getFileData(credentials).pipe(
-      map(mcpData => this.convertMCPToFigmaFormat(mcpData)),
-      catchError(this.handleError)
-    );
-  }
+
 
   /**
    * Sync file changes
@@ -112,9 +95,7 @@ export class MCPConnectionService {
       components: this.extractComponentsFromMCP(mcpData),
       artboards: this.extractArtboardsFromMCP(mcpData),
       fileInfo: {
-        name: mcpData.name || 'MCP Project',
-        lastModified: new Date().toISOString(),
-        version: '1.0'
+
       }
     };
   }
@@ -136,7 +117,7 @@ export class MCPConnectionService {
   }
 
   private extractArtboardsFromMCP(mcpData: MCPFileResponse): ProcessedArtboard[] {
-    return [];
+
   }
 
   private getHeaders(credentials: MCPCredentials): HttpHeaders {

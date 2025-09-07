@@ -32,7 +32,7 @@ export class FigmaService {
     const headers = this.getHeaders(credentials.accessToken);
     const url = `${this.FIGMA_API_BASE}/files/${credentials.fileId}`;
     
-    return this.http.get<FigmaFileResponse>(url, { headers }).pipe(
+
       catchError(this.handleError)
     );
   }
@@ -44,7 +44,7 @@ export class FigmaService {
     const headers = this.getHeaders(credentials.accessToken);
     const url = `${this.FIGMA_API_BASE}/files/${credentials.fileId}/styles`;
     
-    return this.http.get<any>(url, { headers }).pipe(
+
       catchError(this.handleError)
     );
   }
@@ -54,7 +54,7 @@ export class FigmaService {
    */
   getFileComponents(credentials: FigmaCredentials): Observable<any> {
     const headers = this.getHeaders(credentials.accessToken);
-    const url = `${this.FIGMA_API_BASE}/files/${credentials.fileId}/components`;
+
     
     return this.http.get<any>(url, { headers }).pipe(
       catchError(this.handleError)
@@ -90,39 +90,7 @@ export class FigmaService {
       stylesData: this.getFileStyles(credentials),
       componentsData: this.getFileComponents(credentials)
     }).pipe(
-      switchMap(({ fileData, stylesData, componentsData }) => {
-        const pages = this.extractPages(fileData);
-        const designTokens = this.extractDesignTokens(stylesData, fileData);
-        const localStyles = this.extractLocalStyles(stylesData, fileData);
-        const extractedComponents = this.extractComponents(componentsData, fileData);
-        
-        const allNodeIds = [
-          ...pages.map(p => p.id),
-          ...extractedComponents.map(c => c.id || c.key),
-          ...this.findAllFrames(fileData)
-        ].filter(id => id && id.trim());
-        
-        if (allNodeIds.length > 0) {
-          return this.getImages(credentials, allNodeIds).pipe(
-            map(imageResponse => ({
-              pages: this.populatePageThumbnails(pages, imageResponse),
-              designTokens,
-              localStyles,
-              components: this.populateComponentThumbnails(extractedComponents, imageResponse),
-              artboards: this.extractAllArtboards(fileData, imageResponse),
-              fileInfo: this.extractFileInfo(fileData)
-            }))
-          );
-        } else {
-          return of({
-            pages,
-            designTokens,
-            localStyles,
-            components: extractedComponents,
-            artboards: this.extractAllArtboards(fileData, { images: {} }),
-            fileInfo: this.extractFileInfo(fileData)
-          });
-        }
+
       }),
       catchError(this.handleError)
     );
@@ -140,15 +108,14 @@ export class FigmaService {
           return of([]);
         }
 
-        const frames: Artboard[] = [];
+
         
         page.children.forEach(child => {
           if (child.type === 'FRAME' && child.absoluteBoundingBox) {
             frames.push({
               id: child.id,
               name: child.name,
-              type: 'FRAME',
-              thumbnail: '',
+
               absoluteBoundingBox: {
                 x: child.absoluteBoundingBox.x,
                 y: child.absoluteBoundingBox.y,
@@ -194,87 +161,6 @@ export class FigmaService {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json'
     });
-  }
-
-  private extractPages(fileData: FigmaFileResponse): FigmaPage[] {
-    const pages: FigmaPage[] = [];
-    
-    if (fileData.document.children) {
-      fileData.document.children.forEach(page => {
-        if (page.type === 'CANVAS') {
-          const frameChildren = page.children?.filter(child => child.type === 'FRAME') || [];
-          
-          pages.push({
-            id: page.id,
-            name: page.name,
-            thumbnail: '',
-            children: frameChildren
-          });
-        }
-      });
-    }
-    
-    return pages;
-  }
-
-  private extractDesignTokens(stylesData: any, fileData: FigmaFileResponse): DesignToken[] {
-    const tokens: DesignToken[] = [];
-    
-    if (stylesData && stylesData.meta && stylesData.meta.styles) {
-      Object.values(stylesData.meta.styles).forEach((style: any) => {
-        if (style.style_type === 'FILL') {
-          tokens.push({
-            type: 'color',
-            name: style.name,
-            value: this.extractColorValue(style),
-            description: style.description || '',
-            category: this.categorizeToken(style.name)
-          });
-        }
-      });
-    }
-    
-    return tokens;
-  }
-
-  private extractLocalStyles(stylesData: any, fileData: FigmaFileResponse): LocalStyle[] {
-    const localStyles: LocalStyle[] = [];
-    
-    if (stylesData && stylesData.meta && stylesData.meta.styles) {
-      Object.values(stylesData.meta.styles).forEach((style: any) => {
-        localStyles.push({
-          id: style.node_id,
-          name: style.name,
-          type: style.style_type as 'FILL' | 'TEXT' | 'EFFECT',
-          description: style.description || '',
-          styleType: style.style_type
-        });
-      });
-    }
-    
-    return localStyles;
-  }
-
-  private extractComponents(componentsData: any, fileData: FigmaFileResponse): FigmaComponent[] {
-    const components: FigmaComponent[] = [];
-    
-    if (componentsData && componentsData.meta && componentsData.meta.components) {
-      Object.values(componentsData.meta.components).forEach((component: any) => {
-        components.push({
-          id: component.node_id,
-          key: component.key,
-          name: component.name,
-          description: component.description || '',
-          documentationLinks: [],
-          thumbnail: '',
-          variants: [],
-          properties: []
-        });
-      });
-    }
-    
-    return components;
-  }
 
   private findAllFrames(fileData: FigmaFileResponse): string[] {
     const frameIds: string[] = [];
