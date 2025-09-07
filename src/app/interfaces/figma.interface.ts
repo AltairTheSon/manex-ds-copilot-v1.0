@@ -37,6 +37,15 @@ export interface FigmaFileResponse {
   version: string;
 }
 
+export interface MCPFileResponse {
+  document: any;
+  components: { [key: string]: any };
+  styles: { [key: string]: any };
+  name: string;
+  lastModified: string;
+  version: string;
+}
+
 export interface FigmaNode {
   id: string;
   name: string;
