@@ -32,6 +32,7 @@ export class FigmaService {
     const headers = this.getHeaders(credentials.accessToken);
     const url = `${this.FIGMA_API_BASE}/files/${credentials.fileId}`;
     
+
       catchError(this.handleError)
     );
   }
@@ -125,13 +126,19 @@ export class FigmaService {
           }
         });
 
-
+        if (frames.length > 0) {
+          const nodeIds = frames.map(frame => frame.id);
+          return this.getImages(credentials, nodeIds).pipe(
+            map((imageResponse: FigmaImageResponse) => {
+              return frames.map(frame => ({
+                ...frame,
+                thumbnail: imageResponse.images[frame.id] || ''
               }));
             }),
             catchError(() => of(frames))
           );
         } else {
-
+          return of([]);
         }
       }),
       catchError(() => of([]))
@@ -154,87 +161,6 @@ export class FigmaService {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json'
     });
-  }
-
-  private extractPages(fileData: FigmaFileResponse): FigmaPage[] {
-    const pages: FigmaPage[] = [];
-    
-    if (fileData.document.children) {
-      fileData.document.children.forEach(page => {
-        if (page.type === 'CANVAS') {
-          const frameChildren = page.children?.filter(child => child.type === 'FRAME') || [];
-          
-          pages.push({
-            id: page.id,
-            name: page.name,
-            thumbnail: '',
-            children: frameChildren
-          });
-        }
-      });
-    }
-    
-    return pages;
-  }
-
-  private extractDesignTokens(stylesData: any, fileData: FigmaFileResponse): DesignToken[] {
-    const tokens: DesignToken[] = [];
-    
-    if (stylesData && stylesData.meta && stylesData.meta.styles) {
-      Object.values(stylesData.meta.styles).forEach((style: any) => {
-        if (style.style_type === 'FILL') {
-          tokens.push({
-            type: 'color',
-            name: style.name,
-            value: this.extractColorValue(style),
-            description: style.description || '',
-            category: this.categorizeToken(style.name)
-          });
-        }
-      });
-    }
-    
-    return tokens;
-  }
-
-  private extractLocalStyles(stylesData: any, fileData: FigmaFileResponse): LocalStyle[] {
-    const localStyles: LocalStyle[] = [];
-    
-    if (stylesData && stylesData.meta && stylesData.meta.styles) {
-      Object.values(stylesData.meta.styles).forEach((style: any) => {
-        localStyles.push({
-          id: style.node_id,
-          name: style.name,
-          type: style.style_type as 'FILL' | 'TEXT' | 'EFFECT',
-          description: style.description || '',
-          styleType: style.style_type
-        });
-      });
-    }
-    
-    return localStyles;
-  }
-
-  private extractComponents(componentsData: any, fileData: FigmaFileResponse): FigmaComponent[] {
-    const components: FigmaComponent[] = [];
-    
-    if (componentsData && componentsData.meta && componentsData.meta.components) {
-      Object.values(componentsData.meta.components).forEach((component: any) => {
-        components.push({
-          id: component.node_id,
-          key: component.key,
-          name: component.name,
-          description: component.description || '',
-          documentationLinks: [],
-          thumbnail: '',
-          variants: [],
-          properties: []
-        });
-      });
-    }
-    
-    return components;
-  }
 
   private findAllFrames(fileData: FigmaFileResponse): string[] {
     const frameIds: string[] = [];

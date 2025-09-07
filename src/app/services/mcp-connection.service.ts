@@ -4,7 +4,7 @@ import { Observable, of, throwError } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import {
   MCPCredentials,
-  MCPFileResponse,
+
   FigmaPage,
   DesignToken,
   LocalStyle,
@@ -57,6 +57,17 @@ export class MCPConnectionService {
   }> {
     return this.getFileData(credentials).pipe(
 
+
+  /**
+   * Sync file changes
+   */
+  syncFileChanges(credentials: MCPCredentials): Observable<boolean> {
+    const headers = this.getHeaders(credentials);
+    
+    return this.http.get(`${credentials.serverUrl}/projects/${credentials.projectId}/changes`, { headers }).pipe(
+      map(() => true),
+      catchError(() => of(false))
+    );
   }
 
   /**
@@ -90,19 +101,19 @@ export class MCPConnectionService {
   }
 
   private extractPagesFromMCP(mcpData: MCPFileResponse): FigmaPage[] {
-
+    return [];
   }
 
   private extractDesignTokensFromMCP(mcpData: MCPFileResponse): DesignToken[] {
-
+    return [];
   }
 
   private extractLocalStylesFromMCP(mcpData: MCPFileResponse): LocalStyle[] {
-
+    return [];
   }
 
   private extractComponentsFromMCP(mcpData: MCPFileResponse): FigmaComponent[] {
-
+    return [];
   }
 
   private extractArtboardsFromMCP(mcpData: MCPFileResponse): ProcessedArtboard[] {
